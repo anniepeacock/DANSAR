@@ -5,9 +5,9 @@
 * Import Data in Notebook: 
 
 * Biomass: [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/anniepeacock/sar_notebooks/blob/devel/sar_notebooks/SAR_Notebooks/biomass/Biomass.ipynb)
-* Crop: 
+* Crop: [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/anniepeacock/sar_notebooks/blob/devel/sar_notebooks/SAR_Notebooks/crop_classification/Crop_Example.ipynb)
 * Fire: [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/anniepeacock/sar_notebooks/blob/devel/sar_notebooks/SAR_Notebooks/fire/Fire.ipynb)
-* Flood:
+* Flood:[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/anniepeacock/sar_notebooks/blob/devel/sar_notebooks/SAR_Notebooks/flood/Flood.ipynb)
 * Forest Disturbance:
 * Wetland Inundation:
 * Landslides:
