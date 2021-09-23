@@ -47,7 +47,5 @@ pip install -r requirements.txt
 python -m ipykernel install --user --name sar_notebooks
 
 ## Acknowledgements
+UAVSAR data in presentations and/or publications with UAVSAR data courtesy NASA/JPL-Caltech. UAVSAR data policy is governed by JPL's data policy shown here: http://www.jpl.nasa.gov/imagepolicy
 
-Copyright  (c) 2021  California  Institute  of Technology (“Caltech”). U.S. Government sponsorship acknowledged. 
-
-All  rights  reserved. 
