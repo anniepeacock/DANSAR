@@ -2,12 +2,10 @@
 
 ## Google Colab Usage
 
+To view the Google Colab Notebooks, click the "Open in Colab" button <img width="105" alt="Screen Shot 2021-09-23 at 2 39 58 PM" src="https://user-images.githubusercontent.com/69326547/134588404-d47e30d0-33dd-42bb-803d-2a6d2a965fb0.png">for each example. These are links replacing the web page URL "github.com" with the string "colab.research.google.com". No account is necessary to view the notebooks. However, logging into a Google Account is required to run the notebooks and make code changes.
+
 * Data_Import.ipynb Link: [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/anniepeacock/sar_notebooks/blob/master/SAR_Notebooks/Data_Import.ipynb)
 * Fire.ipynb Link: [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/anniepeacock/sar_notebooks/blob/master/SAR_Notebooks/Fire.ipynb)
-
-To view the Google Colab Notebooks, click the "Open in Colab" button for each example. No account is necessary to view the notebooks. However, logging into a Google Account is required to run the notebooks and make code changes.
-
-To view a jupyter notebook file on github as a Google Colab notebook, delete all characters of the web page URL through “github.com” and replace the deleted characters with the string “colab.research.google.com”.
 
 ## MyBinder Usage
 
