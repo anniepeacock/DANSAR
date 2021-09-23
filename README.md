@@ -4,7 +4,9 @@
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/anniepeacock/sar_notebooks/blob/devel/sar_notebooks/RGB/RGB_Stretch.ipynb)
 
-To view the Google Colab Notebooks, click the "Open in Colab" button above. No account is necessary to view the notebooks. However, logging into a Google Account is required to run the notebooks and make code changes.
+To view the Google Colab Notebooks, click the "Open in Colab" button for each example. The button above links an RGB stretching notebook. No account is necessary to view the notebooks. However, logging into a Google Account is required to run the notebooks and make code changes.
+
+To view a jupyter notebook file on github as a Google Colab notebook, delete all characters of the web page URL through “github.com” and replace the deleted characters with the string “colab.research.google.com”.
 
 ## MyBinder Usage
 
