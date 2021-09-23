@@ -2,7 +2,8 @@
 
 ## Google Colab Usage
 
-* Fire: [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/anniepeacock/sar_notebooks/blob/master/sar_notebooks/Science/fire/Fire.ipynb)
+* Data Import: [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/anniepeacock/sar_notebooks/blob/master/SAR_Notebooks/Data_Import.ipynb)
+* Fire: [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/anniepeacock/sar_notebooks/blob/master/SAR_Notebooks/Fire.ipynb)
 
 To view the Google Colab Notebooks, click the "Open in Colab" button for each example. No account is necessary to view the notebooks. However, logging into a Google Account is required to run the notebooks and make code changes.
 
