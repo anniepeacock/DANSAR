@@ -1,0 +1,14 @@
+ipyleaflet
+ipywidgets
+voila
+ipython
+rasterio
+numpy
+matplotlib
+plotly
+pathlib
+geopandas
+varname
+scikit-image
+rioxarray
+geemap
