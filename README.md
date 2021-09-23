@@ -11,7 +11,7 @@ To view a jupyter notebook file on github as a Google Colab notebook, delete all
 
 ## MyBinder Usage
 
-[![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/anniepeacock/sar_notebooks/master)
+[![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/anniepeacock/sar_notebooks/main)
 
 MyBinder turns a Github repository into a collection of interactive notebooks. 
 From MyBinder's (https://mybinder.org) Python tutorial:
