@@ -4,6 +4,8 @@
 
 ## MyBinder Usage
 
+[![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/anniepeacock/sar_notebooks/devel)
+
 ## Jupyter Notebook Usage 
 
 
