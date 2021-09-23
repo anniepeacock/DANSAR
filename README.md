@@ -3,20 +3,19 @@
 ## Google Colab Usage
 
 * Import Data in Notebook: 
-
 * Biomass: [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/anniepeacock/sar_notebooks/blob/devel/sar_notebooks/SAR_Notebooks/biomass/Biomass.ipynb)
 * Crop: [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/anniepeacock/sar_notebooks/blob/devel/sar_notebooks/SAR_Notebooks/crop_classification/Crop_Example.ipynb)
 * Fire: [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/anniepeacock/sar_notebooks/blob/devel/sar_notebooks/SAR_Notebooks/fire/Fire.ipynb)
 * Flood:[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/anniepeacock/sar_notebooks/blob/devel/sar_notebooks/SAR_Notebooks/flood/Flood.ipynb)
-* Forest Disturbance:
-* Wetland Inundation:
-* Landslides:
-* Oil Spill:
-* Open Water:
-* Generate RGBs:
-* Sea Ice:
-* Soil Moisture:
-* Urban Landcover: 
+* Forest Disturbance:[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/anniepeacock/sar_notebooks/blob/devel/sar_notebooks/SAR_Notebooks/forest_disturbance/Flood.ipynb)
+* Wetland Inundation:[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/anniepeacock/sar_notebooks/blob/devel/sar_notebooks/SAR_Notebooks/wetland_inundation/Forest_Disturbance.ipynb)
+* Landslides:[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/anniepeacock/sar_notebooks/blob/devel/sar_notebooks/SAR_Notebooks/landslide/Landslide.ipynb)
+* Oil Spill:[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/anniepeacock/sar_notebooks/blob/devel/sar_notebooks/SAR_Notebooks/oil_spill/Oil_Spill.ipynb)
+* Open Water:[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/anniepeacock/sar_notebooks/blob/devel/sar_notebooks/SAR_Notebooks/openwater/Open_Water.ipynb)
+* Generate RGBs:[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/anniepeacock/sar_notebooks/blob/devel/sar_notebooks/SAR_Notebooks/rgb/RGB_Stretch.ipynb)
+* Sea Ice:[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/anniepeacock/sar_notebooks/blob/devel/sar_notebooks/SAR_Notebooks/sea_ice/Sea_Ice.ipynb)
+* Soil Moisture:[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/anniepeacock/sar_notebooks/blob/devel/sar_notebooks/SAR_Notebooks/soil_moisture/soil_moisture.ipynb)
+* Urban Landcover: [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/anniepeacock/sar_notebooks/blob/devel/sar_notebooks/SAR_Notebooks/urban_landcover/Land_Use.ipynb)
 
 To view the Google Colab Notebooks, click the "Open in Colab" button for each example. No account is necessary to view the notebooks. However, logging into a Google Account is required to run the notebooks and make code changes.
 
@@ -24,7 +23,7 @@ To view a jupyter notebook file on github as a Google Colab notebook, delete all
 
 ## MyBinder Usage
 
-[![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/anniepeacock/sar_notebooks/master)
+[![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/anniepeacock/sar_notebooks/devel)
 
 MyBinder turns a Github repository into a collection of interactive notebooks. 
 From MyBinder's (https://mybinder.org) Python tutorial:
