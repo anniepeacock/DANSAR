@@ -2,12 +2,33 @@
 
 ## Google Colab Usage
 
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/googlecolab/colabtools/blob/master/notebooks/colab-github-demo.ipynb)
+
 ## MyBinder Usage
 
 [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/anniepeacock/sar_notebooks/devel)
 
 ## Jupyter Notebook Usage 
 
+1. Download repository
+2. Open the terminal
+3. Change the working directory of the terminal session to the downloaded repository.
+4. Create a virtual environment using conda via:
+
+conda create --name sar_notebooks python=3.7
+
+5. Make sure to hit y to confirm that the listed packages can be downloaded for this environment.
+6. Activate the virtual environment:
+
+conda activate sar_noteboooks
+
+7. Install requirements:
+
+pip install -r requirements.txt
+
+8. Create a new jupyter kernel:
+
+python -m ipykernel install --user --name sar_notebooks
 
 ## Acknowledgements
 
