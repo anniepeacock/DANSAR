@@ -4,9 +4,22 @@
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/googlecolab/colabtools/blob/master/notebooks/colab-github-demo.ipynb)
 
+To view the Google Colab Notebooks, click the "Open in Colab" button above. No account is necessary to view the notebooks. However, logging into a Google Account is required to run the notebooks and make code changes.
+
 ## MyBinder Usage
 
 [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/anniepeacock/sar_notebooks/devel)
+
+MyBinder turns a Github repository into a collection of interactive notebooks. 
+From MyBinder's (https://mybinder.org) Python tutorial:
+When you click on the MyBinder link, BinderHub (the backend of Binder) is:
+* Fetching your repo from GitHub
+* Analysing the contents
+* Creating a Docker file based on your repo
+* Launching that Docker image in the Cloud
+* Connecting you to it via your browser
+
+This may take several minutes to load.
 
 ## Jupyter Notebook Usage 
 
