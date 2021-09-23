@@ -1,8 +1,7 @@
 # SAR Exploration Notebooks
 
 ## Google Colab Usage
-
-* Import Data in Notebook: 
+* Import Data in Notebook: [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/anniepeacock/sar_notebooks/blob/devel/Data_Import.ipynb)
 * Biomass: [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/anniepeacock/sar_notebooks/blob/devel/sar_notebooks/SAR_Notebooks/biomass/Biomass.ipynb)
 * Crop: [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/anniepeacock/sar_notebooks/blob/devel/sar_notebooks/SAR_Notebooks/crop_classification/Crop_Example.ipynb)
 * Fire: [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/anniepeacock/sar_notebooks/blob/devel/sar_notebooks/SAR_Notebooks/fire/Fire.ipynb)
