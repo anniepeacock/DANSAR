@@ -6,9 +6,6 @@ To view the Google Colab Notebooks, click the "Open in Colab" button <img width=
 
 No account is necessary to view the notebooks. However, a Google Account login is required logging to execute and upload data to the notebooks. 
 
-* Data_Import.ipynb Link: [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/anniepeacock/sar_notebooks/blob/master/SAR_Notebooks/Data_Import.ipynb)
-* Fire.ipynb Link: [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/anniepeacock/sar_notebooks/blob/master/SAR_Notebooks/Fire.ipynb)
-
 ## MyBinder Usage
 
 [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/anniepeacock/sar_notebooks/main)
