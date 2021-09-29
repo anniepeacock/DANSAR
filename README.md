@@ -1,5 +1,12 @@
 # SAR Exploration Notebooks
 
+To edit Google Colab Notebooks: 
+1. Follow Google Colab Notebook link at the top of the Jupyter Notebook (*.ipynb). 
+2. Log into your github Google Account to run the notebooks and make and edits. 
+3. In the upper left corner of the Colab Notebook, select "File" --> "Save a copy in Github". This will prompt a new window popup asking for a Github login. After loggin in, you will be asked to specify the link to the notebook you are saving to Github. Double check the "Branch" and "File Path" pointing to the desired location.
+
+Alternatively, clone this repo locally to push changes.
+
 ## Google Colab Usage
 * Import Data in Notebook: [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/anniepeacock/sar_notebooks/blob/devel/Data_Import.ipynb)
 * Biomass: [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/anniepeacock/sar_notebooks/blob/devel/Biomass.ipynb)
