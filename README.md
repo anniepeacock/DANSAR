@@ -2,7 +2,7 @@
 
 ## Google Colab Usage
 
-To view the Google Colab Notebooks, click the "Open in Colab" button <img width="105" alt="Screen Shot 2021-09-23 at 2 39 58 PM" src="https://user-images.githubusercontent.com/69326547/134588404-d47e30d0-33dd-42bb-803d-2a6d2a965fb0.png">for each example. These are links replacing the web page URL "github.com" with the string "colab.research.google.com". 
+To view the Google Colab Notebooks, click the "Open in Colab" button <img width="105" alt="Screen Shot 2021-09-23 at 2 39 58 PM" src="https://user-images.githubusercontent.com/69326547/134588404-d47e30d0-33dd-42bb-803d-2a6d2a965fb0.png"> in each example's *.ipynb file above. These are links replacing the web page URL "github.com" with the string "colab.research.google.com". 
 
 No account is necessary to view the notebooks. However, a Google Account login is required logging to execute and upload data to the notebooks. 
 
