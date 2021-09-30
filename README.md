@@ -1,27 +1,27 @@
 # SAR Exploration Notebooks
 
-To edit Google Colab Notebooks: 
-1. Follow Google Colab Notebook link at the top of the Jupyter Notebook (*.ipynb). 
-2. Log into your github Google Account to run the notebooks and make and edits. 
-3. In the upper left corner of the Colab Notebook, select "File" --> "Save a copy in Github". This will prompt a new window popup asking for a Github login. After loggin in, you will be asked to specify the link to the notebook you are saving to Github. Double check the "Branch" and "File Path" pointing to the desired location.
+To edit the Google Colab Notebooks: 
+1. Follow the Google Colab Notebook links at the top of the Jupyter Notebook (*.ipynb). 
+2. Login to your Github Account to run the notebooks and make and edits. 
+3. In the upper left corner of the Colab Notebook, select "File" --> "Save a copy in Github". This will launch a new window asking for a Github login. After logging in, you will be asked to specify where to save the change on Github. Double check the "Branch" and "File Path" are pointing to the desired location.
 
 Alternatively, clone this repo locally to push changes.
 
 ## Google Colab Usage
-* Import Data in Notebook: [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/anniepeacock/sar_notebooks/blob/devel/Data_Import.ipynb)
-* Biomass: [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/anniepeacock/sar_notebooks/blob/devel/Biomass.ipynb)
-* Crop: [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/anniepeacock/sar_notebooks/blob/devel/Crop_Type.ipynb)
-* Fire: [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/anniepeacock/sar_notebooks/blob/devel/Fire.ipynb)
-* Flood:[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/anniepeacock/sar_notebooks/blob/devel/Flood.ipynb)
-* Forest Disturbance:[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/anniepeacock/sar_notebooks/blob/devel/Forest_Disturbance.ipynb)
-* Wetland Inundation:[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/anniepeacock/sar_notebooks/blob/devel/Wetland_Inundation.ipynb)
-* Landslides:[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/anniepeacock/sar_notebooks/blob/devel/Landslide.ipynb)
-* Oil Spill:[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/anniepeacock/sar_notebooks/blob/devel/Oil_Spill.ipynb)
-* Open Water:[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/anniepeacock/sar_notebooks/blob/devel/Open_Water.ipynb)
-* Generate RGBs:[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/anniepeacock/sar_notebooks/blob/devel/RGB_Stretch.ipynb)
-* Sea Ice:[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/anniepeacock/sar_notebooks/blob/devel/Sea_Ice.ipynb)
-* Soil Moisture:[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/anniepeacock/sar_notebooks/blob/devel/Soil_Moisture.ipynb)
-* Urban Landcover: [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/anniepeacock/sar_notebooks/blob/devel/Urban_Landcover.ipynb)
+* Import Data in Notebook: [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/anniepeacock/DANSAR/blob/devel/Data_Import.ipynb)
+* Biomass: [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/anniepeacock/DANSAR/blob/devel/Biomass.ipynb)
+* Crop: [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/anniepeacock/DANSAR/blob/devel/Crop_Type.ipynb)
+* Fire: [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/anniepeacock/DANSAR/blob/devel/Fire.ipynb)
+* Flood:[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/anniepeacock/DANSAR/blob/devel/Flood.ipynb)
+* Forest Disturbance:[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/anniepeacock/DANSAR/blob/devel/Forest_Disturbance.ipynb)
+* Wetland Inundation:[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/anniepeacock/DANSAR/blob/devel/Wetland_Inundation.ipynb)
+* Landslides:[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/anniepeacock/DANSAR/blob/devel/Landslide.ipynb)
+* Oil Spill:[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/anniepeacock/DANSAR/blob/devel/Oil_Spill.ipynb)
+* Open Water:[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/anniepeacock/DANSAR/blob/devel/Open_Water.ipynb)
+* Generate RGBs:[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/anniepeacock/DANSAR/blob/devel/RGB_Stretch.ipynb)
+* Sea Ice:[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/anniepeacock/DANSAR/blob/devel/Sea_Ice.ipynb)
+* Soil Moisture:[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/anniepeacock/DANSAR/blob/devel/Soil_Moisture.ipynb)
+* Urban Landcover: [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/anniepeacock/DANSAR/blob/devel/Urban_Landcover.ipynb)
 
 To view the Google Colab Notebooks, click the "Open in Colab" button for each example. No account is necessary to view the notebooks. However, logging into a Google Account is required to run the notebooks and make code changes.
 
@@ -29,7 +29,7 @@ To view a jupyter notebook file on github as a Google Colab notebook, delete all
 
 ## MyBinder Usage
 
-[![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/anniepeacock/sar_notebooks/devel)
+[![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/anniepeacock/DANSAR/devel)
 
 MyBinder turns a Github repository into a collection of interactive notebooks. 
 From MyBinder's (https://mybinder.org) Python tutorial:
