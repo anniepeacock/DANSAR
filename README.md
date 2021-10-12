@@ -1,7 +1,7 @@
 # DANSAR
  Data Applications Notebooks with SAR 
  
-DANSAR is a collection of Google Colab notebooks exploring SAR data applications. To view the notebooks, click on the *.ipynb files above. At the top of the notebook, should be an "Open in Colab" button such as this image here <img width="105" alt="Screen Shot 2021-09-23 at 2 39 58 PM" src="https://user-images.githubusercontent.com/69326547/134588404-d47e30d0-33dd-42bb-803d-2a6d2a965fb0.png">. To view in Google Colab, click this button at the top of the *.ipynb notebook and a new webpage will launch. These links are replacing the web page URL "github.com" with the string "colab.research.google.com" to launch Google Colab Notebooks. 
+DANSAR is a collection of Google Colab notebooks exploring SAR data applications. To view the notebooks, click on the *.ipynb files above. At the top of the notebook, there is an "Open in Colab" button such as this image here <img width="105" alt="Screen Shot 2021-09-23 at 2 39 58 PM" src="https://user-images.githubusercontent.com/69326547/134588404-d47e30d0-33dd-42bb-803d-2a6d2a965fb0.png">. To view in Google Colab, click this button at the top of the *.ipynb notebook and a new webpage will launch. These links are replacing the web page URL "github.com" with the string "colab.research.google.com" to start the Google Colab Notebooks. 
  
 No account is necessary to view the notebooks. However, a Google Account login is required to execute and upload data to the notebooks. 
 
