@@ -5,6 +5,11 @@ DANSAR is a collection of Google Colab notebooks exploring SAR data applications
  
 No account is necessary to view the notebooks. However, a Google Account login is required to execute and upload data to the notebooks. 
 
+<a href="https://www.loom.com/share/e88828827d6e4d188404c71e09b75b5f">
+    <p> How To Access SAR Google Colab Notebooks - Watch Video</p>
+    <img style="max-width:300px;" src="https://cdn.loom.com/sessions/thumbnails/e88828827d6e4d188404c71e09b75b5f-with-play.gif">
+  </a>
+
 ### Other Notebook Usage Options:
 
 #### MyBinder
