@@ -43,28 +43,6 @@ When you click on the MyBinder link, BinderHub (the backend of Binder) is:
 
 This may take several minutes to load.
 
-## Jupyter Notebook Usage 
-
-1. Download repository
-2. Open the terminal
-3. Change the working directory of the terminal session to the downloaded repository.
-4. Create a virtual environment using conda via:
-
-conda create --name sar_notebooks python=3.7
-
-5. Make sure to hit y to confirm that the listed packages can be downloaded for this environment.
-6. Activate the virtual environment:
-
-conda activate sar_noteboooks
-
-7. Install requirements:
-
-pip install -r requirements.txt
-
-8. Create a new jupyter kernel:
-
-python -m ipykernel install --user --name sar_notebooks
-
 ## Acknowledgements
 
 UAVSAR data in presentations and/or publications with UAVSAR data courtesy NASA/JPL-Caltech. UAVSAR data policy is governed by JPL's data policy shown here: http://www.jpl.nasa.gov/imagepolicy
