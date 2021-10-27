@@ -1,7 +1,7 @@
 # DANSAR
  Data Applications Notebooks with SAR 
  
-DANSAR is a collection of Google Colab notebooks exploring SAR data applications. To view the notebooks, click on the *.ipynb files above. At the top of the notebook, there is an "Open in Colab" button such as this image here <img width="105" alt="Screen Shot 2021-09-23 at 2 39 58 PM" src="https://user-images.githubusercontent.com/69326547/134588404-d47e30d0-33dd-42bb-803d-2a6d2a965fb0.png">. To view in Google Colab, click this button at the top of the *.ipynb notebook and a new webpage will launch. These links are replacing the web page URL "github.com" with the string "colab.research.google.com" to start the Google Colab Notebooks. 
+DANSAR is a collection of notebooks exploring SAR data applications. To view the notebooks with Google Colab, click on the *.ipynb files above. At the top of the notebook, there is an "Open in Colab" button such as this image here <img width="105" alt="Screen Shot 2021-09-23 at 2 39 58 PM" src="https://user-images.githubusercontent.com/69326547/134588404-d47e30d0-33dd-42bb-803d-2a6d2a965fb0.png">.  Click this button at the top of the *.ipynb notebook and a new webpage will launch. These links are replacing the web page URL "github.com" with the string "colab.research.google.com" to start the Google Colab Notebooks. 
  
 No account is necessary to view the notebooks. However, a Google Account login is required to execute and upload data to the notebooks. 
 
@@ -11,6 +11,36 @@ No account is necessary to view the notebooks. However, a Google Account login i
   </a>
 
 ### Other Notebook Usage Options:
+
+#### Run the Jupyter Notebooks Locally with Conda (tested on Mac)
+
+1. Download the DANSAR GitHub repository to your desired local directory
+<pre><code> cd /local/dir
+
+git clone https://github.com/anniepeacock/DANSAR.git 
+</code></pre>
+2. The DANSAR notebooks are written in Python3 and employ a number of python packages (see [requirements.txt](https://github.com/anniepeacock/DANSAR/blob/main/requirements.txt)). To create a new python environment and install the python packages needed to run the notebooks, install [miniconda](https://docs.conda.io/en/latest/miniconda.html) or [Anaconda](https://docs.anaconda.com/anaconda/install/index.html) if haven't already.
+
+3. Once conda is installed, set the terminal's current working directory to the downloaded DANSAR repository, and create a virtual environment using conda. Here, we name the new environment "sar_notebooks" with python version 3.7.
+
+<pre><code> conda create --name sar_notebooks python=3.7 </code></pre>
+
+4. Activate the new sar_noteboks conda virtual environment
+
+<pre><code> conda activate sar_notebooks </code></pre>
+
+5. Install requirements:
+
+<pre><code>pip install -r requirements.txt</code></pre>
+
+6. Create a new jupyter kernel:
+
+<pre><code>python -m ipykernel install --user --name sar_notebooks</code></pre>
+
+7. To launch the notebooks from the terminal, navigate to the current working directory of the repository. Type the command below and a new internet browser should launch with the notebooks. 
+
+<pre><code>jupyter-notebook</code></pre>
+
 
 #### MyBinder
 
@@ -25,28 +55,6 @@ From MyBinder's (https://mybinder.org) Python tutorial, the MyBinder link is usi
 * Connecting you to it via your browser
 
 This may take several minutes to load.
-
-#### Jupyter Notebook
-
-1. Download repository
-2. Open the terminal
-3. Change the working directory of the terminal session to the downloaded repository.
-4. Create a virtual environment using conda via:
-
-conda create --name sar_notebooks python=3.7
-
-5. Make sure to hit y to confirm that the listed packages can be downloaded for this environment.
-6. Activate the virtual environment:
-
-conda activate sar_noteboooks
-
-7. Install requirements:
-
-pip install -r requirements.txt
-
-8. Create a new jupyter kernel:
-
-python -m ipykernel install --user --name sar_notebooks
 
 ## Acknowledgements
 UAVSAR data in presentations and/or publications with UAVSAR data courtesy NASA/JPL-Caltech. UAVSAR data policy is governed by JPL's data policy shown here: http://www.jpl.nasa.gov/imagepolicy
