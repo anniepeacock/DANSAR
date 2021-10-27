@@ -1,18 +1,32 @@
 # DANSAR
- Data Applications Notebooks with SAR 
+ Data Applications Notebooks with SAR
+
+## Contents
+* [Running Notebooks with Google Colab](#GoogleColab) 
+* [Other Notebook Usage Options](#OtherOptions) 
+    * [Run Jupyter Notebooks locally with Conda](#Conda)
+    * [MyBinder](#MyBinder)
+* [Editing the Notebooks](#Editing)
+* [Acknowledgements](#Acknow) 
+* [Citation](#Citation) 
+* [Contributors](#Contributors) 
  
-DANSAR is a collection of notebooks exploring SAR data applications. To view the notebooks with Google Colab, click on the *.ipynb files above. At the top of the notebook, there is an "Open in Colab" button such as this image here <img width="105" alt="Screen Shot 2021-09-23 at 2 39 58 PM" src="https://user-images.githubusercontent.com/69326547/134588404-d47e30d0-33dd-42bb-803d-2a6d2a965fb0.png">.  Click this button at the top of the *.ipynb notebook and a new webpage will launch. These links are replacing the web page URL "github.com" with the string "colab.research.google.com" to start the Google Colab Notebooks. 
+### Running Notebooks with Google Colab<a name="GoogleColab"/>
  
-No account is necessary to view the notebooks. However, a Google Account login is required to execute and upload data to the notebooks. 
+DANSAR is a collection of notebooks exploring SAR data applications. To view the notebooks with Google Colab, click on the *.ipynb files above. At the top of each notebook, there is an "Open in Colab" button such as this image here <img width="105" alt="Screen Shot 2021-09-23 at 2 39 58 PM" src="https://user-images.githubusercontent.com/69326547/134588404-d47e30d0-33dd-42bb-803d-2a6d2a965fb0.png">.  Click this button at the top of the *.ipynb notebook and a new webpage will launch. These buttons contain links replacing the web page URL "github.com" with the string "colab.research.google.com" to start the Google Colab Notebooks. 
+ 
+No account is necessary to view the notebooks. However, a Google Account login is required to execute, modify, and upload additional data to the notebooks. 
 
 <a href="https://www.loom.com/share/e88828827d6e4d188404c71e09b75b5f">
     <p> How To Access SAR Google Colab Notebooks - Watch Video</p>
     <img style="max-width:300px;" src="https://cdn.loom.com/sessions/thumbnails/e88828827d6e4d188404c71e09b75b5f-with-play.gif">
   </a>
+  
+  ------------
 
-### Other Notebook Usage Options:
+### Other Notebook Usage Options:<a name="OtherOptions"/>
 
-#### Run the Jupyter Notebooks Locally with Conda (tested on Mac)
+#### Run the Jupyter Notebooks Locally with Conda (tested on Mac) <a name="Conda"/>
 
 1. Download the DANSAR GitHub repository to your desired local directory
 <pre><code> cd /local/dir
@@ -42,7 +56,7 @@ git clone https://github.com/anniepeacock/DANSAR.git
 <pre><code>jupyter-notebook</code></pre>
 
 
-#### MyBinder
+#### MyBinder <a name="MyBinder"/>
 
 [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/anniepeacock/DANSAR/main)
 
@@ -56,10 +70,26 @@ From MyBinder's (https://mybinder.org) Python tutorial, the MyBinder link is usi
 
 This may take several minutes to load.
 
-## Acknowledgements
+## Editing the Notebooks and Updating the Repo <a name="Editing"/>
+
+### Editing with Google Colab
+1) To edit the Google Colab Notebooks, click the Google Colab Notebook links at the top of the Jupyter Notebook files (*.ipynb) to launch them in Google Colab. 
+2) Login to your Google Account to run the notoebooks and make any changes. 
+3) If you would like to save these changes to the Github repo, navigate to the upper left corner of the Colab Notebook. Select "File" --> "Save a copy in Github". This will launch a new window asking for a Github login. Enter the Github login associated with this repository and push the changes. 
+4) After logging in, you will be asked to specify where to save the change on Github. Double check the "Branch" and "File Path" are pointing to the desired location.
+
+<img width="1312" alt="instructions" src="https://user-images.githubusercontent.com/69326547/139126077-d01eb877-dfcd-44cb-85b8-89ef38a3d122.png">
+
+### Editing Jupyter Noteboooks locally
+
+Alternatively, clone this repo locally, edit the Jupyter Notebook (*.ipynb) files and push changes with [git](https://guides.github.com/introduction/git-handbook/). 
+
+## Acknowledgements<a name="Acknow"/>
 UAVSAR data in presentations and/or publications with UAVSAR data courtesy NASA/JPL-Caltech. UAVSAR data policy is governed by JPL's data policy shown here: http://www.jpl.nasa.gov/imagepolicy
 
-## Citation
+© 2021. California Institute of Technology. Government sponsorship acknowledged.
 
-## Contributors
+## Citation<a name="Citation"/>
+
+## Contributors<a name="Contributors"/>
 
