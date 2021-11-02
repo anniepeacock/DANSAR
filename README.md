@@ -91,5 +91,7 @@ UAVSAR data in presentations and/or publications with UAVSAR data courtesy NASA/
 
 ## Citation<a name="Citation"/>
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.5639922.svg)](https://doi.org/10.5281/zenodo.5639922)
+
 ## Contributors<a name="Contributors"/>
 
