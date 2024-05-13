@@ -12,29 +12,29 @@ from osgeo import gdal
 import requests
 
 def download_files(urls, destination_dir, username=username, password=password):
-    """
-    Function to download files from a list of URLs and save them to a specified destination directory.
-
-    Args:
-    - urls (list): List of URLs to download files from
-    - destination_dir (str): Directory where downloaded files will be saved
-    - username (str): NASA Earthdata Username for download authentication
-    - password (str): NASA Earthdata Username Password for download authentication
-    """
-    os.makedirs(destination_dir, exist_ok=True)  # Create destination directory if it doesn't exist
-
-    for url in urls:
-        filename = os.path.basename(url)
-        destination_path = os.path.join(destination_dir, filename)
-
-        # Download file from URL
-        response = requests.get(url, auth=(username, password))
-        if response.status_code == 200:
-            with open(destination_path, 'wb') as f:
-                f.write(response.content)
-            print(f"Downloaded: {filename}")
+  """
+  Function to download files from a list of URLs and save them to a specified destination directory.
+  
+  Args:
+  - urls (list): List of URLs to download files from
+  - destination_dir (str): Directory where downloaded files will be saved
+  - username (str): NASA Earthdata Username for download authentication
+  - password (str): NASA Earthdata Username Password for download authentication
+   """
+   os.makedirs(destination_dir, exist_ok=True)  # Create destination directory if it doesn't exist
+   
+   for url in urls:
+    filename = os.path.basename(url)
+    destination_path = os.path.join(destination_dir, filename)
+    
+    # Download file from URL
+    response = requests.get(url, auth=(username, password))
+    if response.status_code == 200:
+      with open(destination_path, 'wb') as f:
+        f.write(response.content)
+        print(f"Downloaded: {filename}")
         else:
-            print(f"Failed to download: {filename}, Status code: {response.status_code}")
+          print(f"Failed to download: {filename}, Status code: {response.status_code}")
 
 
 def process_grd_files(input_dir, output_dir, window=None, projection=None):
@@ -117,12 +117,12 @@ def mask_and_save(input_directory, output_directory):
                 break  # Match found, exit inner loop
 
 def convert_db(data):
-"""
-Function to convert UAVSAR data in linear radar power units to decibels (dB)
-
-Args:
-- data (float): array of UAVSAR values in linear radar power units
-"""
+  """
+  Function to convert UAVSAR data in linear radar power units to decibels (dB)
+  
+  Args:
+  - data (float): array of UAVSAR values in linear radar power units
+  """
   db = 10*(math.log(data))
   return db
 
