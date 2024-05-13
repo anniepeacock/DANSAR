@@ -11,7 +11,7 @@ import rasterio as rio
 from osgeo import gdal
 import requests
 
-def download_files(urls, destination_dir, username=username, password=password):
+def download_files(urls, destination_dir, username, password):
   """
   Function to download files from a list of URLs and save them to a specified destination directory.
   
@@ -33,8 +33,8 @@ def download_files(urls, destination_dir, username=username, password=password):
       with open(destination_path, 'wb') as f:
         f.write(response.content)
         print(f"Downloaded: {filename}")
-        else:
-          print(f"Failed to download: {filename}, Status code: {response.status_code}")
+    else:
+      print(f"Failed to download: {filename}, Status code: {response.status_code}")
 
 
 def process_grd_files(input_dir, output_dir, window=None, projection=None):
