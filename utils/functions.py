@@ -21,9 +21,9 @@ def download_files(urls, destination_dir, username=username, password=password):
   - username (str): NASA Earthdata Username for download authentication
   - password (str): NASA Earthdata Username Password for download authentication
    """
-   os.makedirs(destination_dir, exist_ok=True)  # Create destination directory if it doesn't exist
+  os.makedirs(destination_dir, exist_ok=True)  # Create destination directory if it doesn't exist
    
-   for url in urls:
+  for url in urls:
     filename = os.path.basename(url)
     destination_path = os.path.join(destination_dir, filename)
     
