@@ -55,14 +55,13 @@ def process_grd_files(input_dir, output_dir, window=None, projection=None):
     gdal.Warp(output_path, input_path, format='GTiff', outputBounds=window, dstSRS=projection)
 
 
-def process_inc_files(input_dir, output_dir, window=None, projection=None):
-  """ 
-  Function to take all the UAVSAR local incidence angle (*.INC) files in an input directory and save as GeoTIFFs.
-  Checks corresponding GRD filtes to resample the incidence angle file to match the GRD file (required for use with NISAR Simulate data)
+def process_inc_files(input_dir, output_dir, window=None, projection=None, x_resolution=None, y_resolution=None):
+  """
+  Function to take all the UAVSAR GRD files in an input directory and save as GeoTIFFs.
   Can set new extents and projections for the output GeoTIFF.
 
   Args:
-  - input_dir (str): The directory path where the input UAVSAR INC files are located.
+  - input_dir (str): The directory path where the input UAVSAR GRD files are located.
   - output_dir (str): The directory path where the output GeoTIFF files will be saved.
   - window (tuple, optional): Specifies the output bounds for the GeoTIFF files. If not provided, input files' bounds will be used.
   - projection (str, optional): Specifies the output spatial reference system (SRS) for the GeoTIFF files. If not provided, input file's projection will be used.
@@ -71,17 +70,8 @@ def process_inc_files(input_dir, output_dir, window=None, projection=None):
   for inc_file in inc_files:
     input_path = os.path.join(input_dir, inc_file)
     output_path = os.path.join(output_dir, inc_file.replace('.inc', '_inc_resampled.tif'))
-    # Get resolution from the corresponding GRD file (Incidence Angle files will need to be resampled for use with NISAR Simulated data)
-    # to resample the incidence angle file to match the resolution of the GRD file.
-    reprojected_grd = [file for file in os.listdir(output_dir) if file.endswith('_clipped.tif')]
-    if reprojected_grd:
-      reprojected_grd_path = os.path.join(output_dir, reprojected_grd[0])
-      reprojected_grd_info = gdal.Info(reprojected_grd_path, format='json')
-      x_resolution = reprojected_grd_info['geoTransform'][1]
-      y_resolution = abs(reprojected_grd_info['geoTransform'][5])
-      gdal.Warp(output_path, input_path, format='GTiff', outputBounds=window, dstSRS=projection, xRes=x_resolution, yRes=y_resolution)
-    else:
-        print("No clipped GRD file found")
+    gdal.Warp(output_path, input_path, format='GTiff', outputBounds=window, dstSRS=projection, xRes=x_resolution, yRes=y_resolution)
+
 
 def mask_and_save(input_directory, output_directory):
   """
@@ -102,11 +92,12 @@ def mask_and_save(input_directory, output_directory):
         data_filename = os.path.join(input_directory, data_file)
         inc_filename = os.path.join(input_directory, inc_file)
         output_filename = os.path.join(output_directory, data_file.replace('_clipped.tif', '_masked.tif'))
+        print(output_filename)
         with rio.open(data_filename) as data_src, rio.open(inc_filename) as inc_src:
           data = data_src.read(1)
           inc_data = inc_src.read(1)
-          # Perform calculations on data
-          masked_data = data / np.cos(inc_data)
+          # incidence angle corrections
+          masked_data = data / np.cos(inc_data) # Converting sigma0 to gamma0 should remove most of the range/incidence angle dependency.
           masked_data[inc_data < 0.261799] = np.nan # mask where incidence angle is less than 15 degrees (0.261799 radians)
           masked_data[inc_data > 1.22173] = np.nan # mask where incidence angle is greater than 70 degrees (1.22173 radians)
           # Save the masked data
@@ -114,7 +105,7 @@ def mask_and_save(input_directory, output_directory):
           profile.update(dtype=masked_data.dtype, nodata=np.nan)
           with rio.open(output_filename, 'w', **profile) as dst:
             dst.write(masked_data, 1)
-        break  # Match found, exit inner loop
+        break 
 
 def convert_db(data):
   """
