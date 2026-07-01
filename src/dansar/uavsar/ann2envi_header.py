@@ -1,6 +1,7 @@
 import argparse
 import sys
 from pathlib import Path
+from dansar.uavsar.annotation_to_nested_json_dict import annotation_to_nested_json_dict
 
 
 UAVSAR_TO_ENVI_DTYPE = {
@@ -102,15 +103,6 @@ def ann2envi_header(
         raise ValueError("group is empty or contains only whitespace.")
 
     ann_text = ann_path.read_text()
-
-    try:
-        from annotation_to_nested_json_dict import annotation_to_nested_json_dict
-    except ModuleNotFoundError as exc:
-        raise ModuleNotFoundError(
-            "Could not import annotation_to_nested_json_dict. "
-            "Make sure annotation_to_nested_json_dict.py is in the same folder "
-            "as this script."
-        ) from exc
 
     metadata = annotation_to_nested_json_dict(
         ann_text,
