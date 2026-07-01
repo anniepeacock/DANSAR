@@ -2,7 +2,6 @@ import argparse
 import shutil
 import sys
 from pathlib import Path
-from tempfile import TemporaryDirectory
 
 
 def expected_envi_header_path(raster_path):
@@ -44,9 +43,9 @@ def infer_output_tiff_path(raster_path, output_dir, suffix="_cog", extension=".t
     return output_dir / f"{raster_path.stem}{suffix}{extension}"
 
 
-def open_with_explicit_envi_header(raster_path, header_path):
+def prepare_explicit_envi_header(raster_path, header_path):
     """
-    Context manager helper.
+    Make sure GDAL/rasterio can find the ENVI header.
 
     GDAL usually expects an ENVI header named like:
 
@@ -58,7 +57,11 @@ def open_with_explicit_envi_header(raster_path, header_path):
         raster.grd.hdr
         some_other_name.hdr
 
-    This helper creates a temporary expected header if needed.
+    If the provided header is already where GDAL expects it, nothing happens.
+
+    If the provided header has a different name, this function copies it to the
+    expected name next to the raster, then returns the temporary copied path so
+    it can be removed later.
     """
 
     raster_path = Path(raster_path)
@@ -71,11 +74,11 @@ def open_with_explicit_envi_header(raster_path, header_path):
 
     if expected_header.exists():
         raise FileExistsError(
-            f"GDAL expected header already exists, but it is not the header "
-            f"provided by the user:\n"
+            "GDAL expected header already exists, but it is not the header "
+            "provided by the user:\n"
             f"  expected: {expected_header}\n"
             f"  provided: {header_path}\n"
-            f"Refusing to overwrite it."
+            "Refusing to overwrite it."
         )
 
     shutil.copyfile(header_path, expected_header)
@@ -101,7 +104,10 @@ def make_tiff(
 
     This script:
       - opens the raster using the provided HDR
-      - replaces invalid pixels with nodata
+      - converts the data to float32
+      - replaces invalid pixels with float nodata, default -9999.0
+      - writes nodata metadata as float -9999.0
+      - writes an internal mask
       - writes a tiled/compressed GeoTIFF
       - does NOT build overviews
 
@@ -162,6 +168,9 @@ def make_tiff(
     header_path = Path(header_path)
     output_dir = Path(output_dir)
 
+    nodata = float(nodata)
+    invalid_min = float(invalid_min)
+
     if not raster_path.exists():
         raise FileNotFoundError(f"Raster file not found: {raster_path}")
 
@@ -173,6 +182,14 @@ def make_tiff(
 
     if not header_path.is_file():
         raise ValueError(f"Header path is not a file: {header_path}")
+
+    if not isinstance(block_size, int):
+        raise TypeError(
+            f"block_size must be an integer, not {type(block_size).__name__}"
+        )
+
+    if block_size <= 0:
+        raise ValueError("block_size must be greater than zero.")
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -192,7 +209,7 @@ def make_tiff(
     temporary_header = None
 
     try:
-        temporary_header = open_with_explicit_envi_header(
+        temporary_header = prepare_explicit_envi_header(
             raster_path=raster_path,
             header_path=header_path,
         )
@@ -205,7 +222,13 @@ def make_tiff(
             if src.nodata is not None:
                 invalid |= arr == src.nodata
 
+            # Important:
+            # Use float nodata consistently. This avoids QGIS treating -9999
+            # and -9999.0 differently in some rendering/statistics paths.
             arr[invalid] = nodata
+
+            # Internal mask: 255 = valid, 0 = invalid.
+            valid_mask = (~invalid).astype("uint8") * 255
 
             profile = src.profile.copy()
 
@@ -225,10 +248,11 @@ def make_tiff(
 
             # Important:
             # No overviews are created here.
-            # This avoids overview-level confusion with nodata values.
+            # This avoids overview-level confusion with nodata/statistics.
 
             with rasterio.open(final_tiff, "w", **profile) as dst:
                 dst.write(arr, 1)
+                dst.write_mask(valid_mask)
 
         return final_tiff
 
@@ -294,7 +318,8 @@ def main():
         description=(
             "Convert UAVSAR ENVI rasters to tiled, compressed GeoTIFFs. "
             "The user must provide both the raster file and the HDR file. "
-            "This script does not build overviews."
+            "This script writes float32 TIFFs, uses float nodata -9999.0 by "
+            "default, writes an internal mask, and does not build overviews."
         )
     )
 
@@ -331,7 +356,7 @@ def main():
         "--nodata",
         type=float,
         default=-9999.0,
-        help="Output nodata value. Default: -9999.",
+        help="Output nodata value. Default: -9999.0.",
     )
 
     parser.add_argument(
