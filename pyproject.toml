@@ -20,5 +20,7 @@ where = ["src"]
 
 [project.scripts]
 infer-uavsar-paths = "dansar.uavsar.infer_uavsar_paths:main"
-annotation2header = "dansar.uavsar.annotation2header:main"
+download-uavsar = "dansar.uavsar.download_uavsar:main"
+annotation2header = "dansar.uavsar.ann2envi_header:main"
 make-tiff = "dansar.uavsar.make_tiff:main"
+make-asf-session = "dansar.utils.make_asf_session:main"
