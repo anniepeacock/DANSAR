@@ -21,7 +21,7 @@ def expected_envi_header_path(raster_path):
     return raster_path.with_suffix(raster_path.suffix + ".hdr")
 
 
-def infer_output_tiff_path(raster_path, output_dir, suffix="_cog", extension=".tif"):
+def infer_output_tiff_path(raster_path, output_dir, suffix="_tif", extension=".tif"):
     """
     Infer output GeoTIFF path from input raster filename.
 
@@ -31,7 +31,7 @@ def infer_output_tiff_path(raster_path, output_dir, suffix="_cog", extension=".t
         image.grd
 
     output:
-        output_dir/image_cog.tif
+        output_dir/image_tif.tif
     """
 
     raster_path = Path(raster_path)
@@ -51,9 +51,10 @@ def prepare_explicit_envi_header(raster_path, header_path):
 
         raster.grd.hdr
 
-    If the provided header has a different name, this function copies it to the
-    expected name next to the raster, then returns the temporary copied path so
-    it can be removed later.
+    If the provided header is already where GDAL expects it, nothing happens.
+
+    If it has a different name, this function copies it to the expected name
+    next to the raster. The copied temporary header is removed after writing.
     """
 
     raster_path = Path(raster_path)
@@ -81,10 +82,10 @@ def make_tiff(
     raster_path,
     header_path,
     output_dir,
-    nodata=255.0,
+    nodata=None,
     invalid_min=0.0,
     overwrite=False,
-    suffix="_cog",
+    suffix="_tif",
     extension=".tif",
     compress="DEFLATE",
     block_size=512,
@@ -92,23 +93,21 @@ def make_tiff(
     """
     Convert a UAVSAR ENVI raster to a single-band tiled/compressed GeoTIFF.
 
-    The user explicitly provides both the binary raster and the ENVI header.
-
-    This script:
-      - opens the raster using the provided HDR
-      - converts the data to float32
-      - replaces invalid pixels with float nodata, default 255.0
-      - writes nodata metadata
-      - writes one band only
-      - does not write an internal mask
-      - does not build overviews
+    This writes:
+      - one band only
+      - float32 data
+      - invalid pixels as NaN
+      - nodata metadata as NaN
+      - no alpha band
+      - no internal mask
+      - no overviews
 
     Invalid pixels are:
       - NaN
       - Inf
       - values <= invalid_min
 
-    By default, invalid_min is 0.0, so values <= 0 become nodata.
+    Default invalid_min is 0.0, so values <= 0 become NaN.
 
     Parameters
     ----------
@@ -121,17 +120,19 @@ def make_tiff(
     output_dir : str or pathlib.Path
         Directory where the GeoTIFF will be written.
 
-    nodata : float
-        Output nodata value. Default: 255.0.
+    nodata : None or float
+        Output nodata value. Default is None, which means NaN.
+        For float32 rasters, NaN is the preferred nodata value here.
 
     invalid_min : float
-        Values less than or equal to this are set to nodata. Default: 0.0.
+        Values less than or equal to this are set to nodata/NaN.
+        Default: 0.0.
 
     overwrite : bool
         If True, overwrite existing output.
 
     suffix : str
-        Suffix added to raster stem. Default: "_cog".
+        Suffix added to raster stem. Default: "_tif".
 
     extension : str
         Output extension. Default: ".tif".
@@ -160,7 +161,11 @@ def make_tiff(
     header_path = Path(header_path)
     output_dir = Path(output_dir)
 
-    nodata = float(nodata)
+    if nodata is None:
+        nodata = np.nan
+    else:
+        nodata = float(nodata)
+
     invalid_min = float(invalid_min)
 
     if not raster_path.exists():
@@ -212,7 +217,10 @@ def make_tiff(
             invalid = (~np.isfinite(arr)) | (arr <= invalid_min)
 
             if src.nodata is not None:
-                invalid |= arr == src.nodata
+                if np.isfinite(src.nodata):
+                    invalid |= arr == src.nodata
+                else:
+                    invalid |= ~np.isfinite(arr)
 
             arr[invalid] = nodata
 
@@ -229,20 +237,13 @@ def make_tiff(
                 compress=compress,
                 predictor=2,
                 BIGTIFF="IF_SAFER",
-                NUM_THREADS="ALL_CPUS",
             )
-
-            # Remove ENVI-specific or source-driver metadata that can confuse
-            # GeoTIFF writing/display.
-            profile.pop("transform", None)
-            profile["transform"] = src.transform
-            profile["crs"] = src.crs
 
             # Important:
             # No overviews.
             # No internal mask.
+            # No alpha band.
             # One output band only.
-
             with rasterio.open(final_tiff, "w", **profile) as dst:
                 dst.write(arr, 1)
 
@@ -256,16 +257,32 @@ def make_tiff(
 def make_tiffs(
     raster_header_pairs,
     output_dir,
-    nodata=255.0,
+    nodata=None,
     invalid_min=0.0,
     overwrite=False,
-    suffix="_cog",
+    suffix="_tif",
     extension=".tif",
     compress="DEFLATE",
     block_size=512,
 ):
     """
     Convert multiple raster/header pairs to GeoTIFF.
+
+    Parameters
+    ----------
+    raster_header_pairs : list[tuple[str, str]]
+        List of (raster_path, header_path) pairs.
+
+    output_dir : str or pathlib.Path
+        Output directory.
+
+    nodata : None or float
+        Output nodata value. Default is None, which means NaN.
+
+    Returns
+    -------
+    list[pathlib.Path]
+        Written GeoTIFF paths.
     """
 
     if not raster_header_pairs:
@@ -292,14 +309,36 @@ def make_tiffs(
     return output_paths
 
 
+def _parse_nodata(value):
+    """
+    Parse nodata argument from CLI.
+
+    Accepts:
+      --nodata nan
+      --nodata NaN
+      --nodata none
+      --nodata -9999
+      --nodata 255
+    """
+
+    if value is None:
+        return None
+
+    value = str(value).strip()
+
+    if value.lower() in {"nan", "none", "null"}:
+        return None
+
+    return float(value)
+
+
 def main():
     parser = argparse.ArgumentParser(
         description=(
             "Convert UAVSAR ENVI rasters to single-band tiled/compressed "
-            "GeoTIFFs. The user must provide both the raster file and the HDR "
-            "file. This script writes float32 TIFFs, uses nodata=255.0 by "
-            "default, does not write an alpha/mask band, and does not build "
-            "overviews."
+            "GeoTIFFs. The user must provide both the raster file and HDR file. "
+            "This script writes float32 TIFFs with NaN nodata by default: "
+            "no alpha band, no internal mask, no overviews."
         )
     )
 
@@ -334,9 +373,11 @@ def main():
 
     parser.add_argument(
         "--nodata",
-        type=float,
-        default=255.0,
-        help="Output nodata value. Default: 255.0.",
+        default="nan",
+        help=(
+            "Output nodata value. Default: nan. "
+            "Use a number only if you explicitly want a numeric sentinel."
+        ),
     )
 
     parser.add_argument(
@@ -344,7 +385,7 @@ def main():
         type=float,
         default=0.0,
         help=(
-            "Values less than or equal to this are set to nodata. "
+            "Values less than or equal to this are set to nodata/NaN. "
             "Default: 0.0."
         ),
     )
@@ -357,8 +398,8 @@ def main():
 
     parser.add_argument(
         "--suffix",
-        default="_cog",
-        help='Suffix added to output filename stem. Default: "_cog".',
+        default="_tif",
+        help='Suffix added to output filename stem. Default: "_tif".',
     )
 
     parser.add_argument(
@@ -394,7 +435,7 @@ def main():
         output_paths = make_tiffs(
             raster_header_pairs=raster_header_pairs,
             output_dir=args.output_dir,
-            nodata=args.nodata,
+            nodata=_parse_nodata(args.nodata),
             invalid_min=args.invalid_min,
             overwrite=args.overwrite,
             suffix=args.suffix,
