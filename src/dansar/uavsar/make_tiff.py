@@ -51,14 +51,6 @@ def prepare_explicit_envi_header(raster_path, header_path):
 
         raster.grd.hdr
 
-    But users may provide:
-
-        raster.hdr
-        raster.grd.hdr
-        some_other_name.hdr
-
-    If the provided header is already where GDAL expects it, nothing happens.
-
     If the provided header has a different name, this function copies it to the
     expected name next to the raster, then returns the temporary copied path so
     it can be removed later.
@@ -89,7 +81,7 @@ def make_tiff(
     raster_path,
     header_path,
     output_dir,
-    nodata=-9999.0,
+    nodata=255.0,
     invalid_min=0.0,
     overwrite=False,
     suffix="_cog",
@@ -98,18 +90,18 @@ def make_tiff(
     block_size=512,
 ):
     """
-    Convert a UAVSAR ENVI raster to a tiled, compressed GeoTIFF.
+    Convert a UAVSAR ENVI raster to a single-band tiled/compressed GeoTIFF.
 
     The user explicitly provides both the binary raster and the ENVI header.
 
     This script:
       - opens the raster using the provided HDR
       - converts the data to float32
-      - replaces invalid pixels with float nodata, default -9999.0
-      - writes nodata metadata as float -9999.0
-      - writes an internal mask
-      - writes a tiled/compressed GeoTIFF
-      - does NOT build overviews
+      - replaces invalid pixels with float nodata, default 255.0
+      - writes nodata metadata
+      - writes one band only
+      - does not write an internal mask
+      - does not build overviews
 
     Invalid pixels are:
       - NaN
@@ -130,7 +122,7 @@ def make_tiff(
         Directory where the GeoTIFF will be written.
 
     nodata : float
-        Output nodata value. Default: -9999.0.
+        Output nodata value. Default: 255.0.
 
     invalid_min : float
         Values less than or equal to this are set to nodata. Default: 0.0.
@@ -222,13 +214,7 @@ def make_tiff(
             if src.nodata is not None:
                 invalid |= arr == src.nodata
 
-            # Important:
-            # Use float nodata consistently. This avoids QGIS treating -9999
-            # and -9999.0 differently in some rendering/statistics paths.
             arr[invalid] = nodata
-
-            # Internal mask: 255 = valid, 0 = invalid.
-            valid_mask = (~invalid).astype("uint8") * 255
 
             profile = src.profile.copy()
 
@@ -246,13 +232,19 @@ def make_tiff(
                 NUM_THREADS="ALL_CPUS",
             )
 
+            # Remove ENVI-specific or source-driver metadata that can confuse
+            # GeoTIFF writing/display.
+            profile.pop("transform", None)
+            profile["transform"] = src.transform
+            profile["crs"] = src.crs
+
             # Important:
-            # No overviews are created here.
-            # This avoids overview-level confusion with nodata/statistics.
+            # No overviews.
+            # No internal mask.
+            # One output band only.
 
             with rasterio.open(final_tiff, "w", **profile) as dst:
                 dst.write(arr, 1)
-                dst.write_mask(valid_mask)
 
         return final_tiff
 
@@ -264,7 +256,7 @@ def make_tiff(
 def make_tiffs(
     raster_header_pairs,
     output_dir,
-    nodata=-9999.0,
+    nodata=255.0,
     invalid_min=0.0,
     overwrite=False,
     suffix="_cog",
@@ -274,19 +266,6 @@ def make_tiffs(
 ):
     """
     Convert multiple raster/header pairs to GeoTIFF.
-
-    Parameters
-    ----------
-    raster_header_pairs : list[tuple[str, str]]
-        List of (raster_path, header_path) pairs.
-
-    output_dir : str or pathlib.Path
-        Output directory.
-
-    Returns
-    -------
-    list[pathlib.Path]
-        Written GeoTIFF paths.
     """
 
     if not raster_header_pairs:
@@ -316,10 +295,11 @@ def make_tiffs(
 def main():
     parser = argparse.ArgumentParser(
         description=(
-            "Convert UAVSAR ENVI rasters to tiled, compressed GeoTIFFs. "
-            "The user must provide both the raster file and the HDR file. "
-            "This script writes float32 TIFFs, uses float nodata -9999.0 by "
-            "default, writes an internal mask, and does not build overviews."
+            "Convert UAVSAR ENVI rasters to single-band tiled/compressed "
+            "GeoTIFFs. The user must provide both the raster file and the HDR "
+            "file. This script writes float32 TIFFs, uses nodata=255.0 by "
+            "default, does not write an alpha/mask band, and does not build "
+            "overviews."
         )
     )
 
@@ -355,8 +335,8 @@ def main():
     parser.add_argument(
         "--nodata",
         type=float,
-        default=-9999.0,
-        help="Output nodata value. Default: -9999.0.",
+        default=255.0,
+        help="Output nodata value. Default: 255.0.",
     )
 
     parser.add_argument(
