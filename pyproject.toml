@@ -13,6 +13,8 @@ dependencies = [
     "requests",
     "asf-search",
     "rasterio",
+    "earthengine-api",
+    "google-cloud-storage",
 ]
 
 [tool.setuptools.packages.find]
