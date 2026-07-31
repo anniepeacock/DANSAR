@@ -1,0 +1,17 @@
+name: DANSAR
+
+channels:
+  - conda-forge
+  - nodefaults
+
+dependencies:
+  - python=3.11
+  - pip
+  - ipykernel
+  - numpy
+  - requests
+  - asf_search
+  - rasterio
+  - gdal
+  - earthengine-api
+  - google-cloud-storage
