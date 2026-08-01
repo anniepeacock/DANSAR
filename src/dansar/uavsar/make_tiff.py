@@ -72,46 +72,27 @@ def _infer_polarization(filename):
 
     return match.group(1) if match else None
 
-
 def make_tiff(
     raster_path,
     header_path,
     output_dir,
-    nodata=None,
+    nodata=255.0,
     invalid_min=0.0,
     overwrite=False,
-    suffix="_tif",
+    suffix="_cog",
     extension=".tif",
     compress="DEFLATE",
     block_size=512,
     metadata=None,
 ):
     """
-    Convert a UAVSAR ENVI raster to a single-band tiled/compressed GeoTIFF.
-
-    The output contains:
-
-      - one float32 band
-      - invalid pixels written as nodata
-      - tiled and compressed storage
-      - no alpha band
-      - no internal mask
-      - UAVSAR annotation metadata embedded as GeoTIFF tags
-
-    Metadata behavior
-    -----------------
-    If ``metadata`` is supplied, the complete nested dictionary is stored
-    in the ``UAVSAR_ANNOTATION_JSON`` tag.
-
-    Scalar metadata fields are also flattened into individual tags such as:
-
-        UAVSAR_GLOBAL_SITE_DESCRIPTION
-        UAVSAR_GRD_PWR_SET_ROWS
+    Convert a UAVSAR ENVI raster to a single-band tiled/compressed
+    GeoTIFF and optionally embed UAVSAR annotation metadata.
 
     Parameters
     ----------
     raster_path : str or pathlib.Path
-        Input UAVSAR raster binary, for example .grd, .inc, .hgt, or .slope.
+        Input UAVSAR raster binary, such as .grd.
 
     header_path : str or pathlib.Path
         Explicit ENVI header file.
@@ -119,14 +100,14 @@ def make_tiff(
     output_dir : str or pathlib.Path
         Directory where the GeoTIFF will be written.
 
-    nodata : None or float
-        Output nodata value. None means NaN.
+    nodata : float
+        Output nodata value. Default: 255.0.
 
     invalid_min : float
-        Values less than or equal to this are replaced by nodata.
+        Values less than or equal to this are set to nodata.
 
     overwrite : bool
-        If True, replace an existing output file.
+        If True, overwrite an existing output file.
 
     suffix : str
         Suffix added to the raster stem.
@@ -141,8 +122,8 @@ def make_tiff(
         Internal tile size.
 
     metadata : dict or None
-        Nested UAVSAR metadata dictionary, normally created by
-        ``annotation_to_nested_json_dict``.
+        Nested dictionary produced from the UAVSAR annotation file.
+        The complete dictionary is stored in the TIFF as JSON.
 
     Returns
     -------
@@ -153,7 +134,6 @@ def make_tiff(
     try:
         import numpy as np
         import rasterio
-
     except ModuleNotFoundError as exc:
         raise ModuleNotFoundError(
             "make_tiff requires numpy and rasterio."
@@ -163,18 +143,14 @@ def make_tiff(
     header_path = Path(header_path)
     output_dir = Path(output_dir)
 
+    nodata = float(nodata)
+    invalid_min = float(invalid_min)
+
     if metadata is not None and not isinstance(metadata, dict):
         raise TypeError(
             "metadata must be a dictionary or None, "
             f"not {type(metadata).__name__}"
         )
-
-    if nodata is None:
-        nodata = np.nan
-    else:
-        nodata = float(nodata)
-
-    invalid_min = float(invalid_min)
 
     if not raster_path.exists():
         raise FileNotFoundError(
@@ -212,6 +188,7 @@ def make_tiff(
         exist_ok=True,
     )
 
+    # Use the helper already present in make_tiff.py.
     final_tiff = infer_output_tiff_path(
         raster_path=raster_path,
         output_dir=output_dir,
@@ -225,9 +202,41 @@ def make_tiff(
             "Use overwrite=True to replace it."
         )
 
+    # Infer polarization from the input filename.
+    polarization_match = re.search(
+        r"(HHHH|HVHV|VVVV|HHHV|HHVV|HVVV)",
+        raster_path.name.upper(),
+    )
+
+    polarization = (
+        polarization_match.group(1)
+        if polarization_match
+        else "UNKNOWN"
+    )
+
+    dataset_tags = {
+        "MISSION": "UAVSAR",
+        "SENSOR": "UAVSAR",
+        "PRODUCT_TYPE": "GRD",
+        "POLARIZATION": polarization,
+        "DATA_TYPE": "FLOAT32",
+        "DATA_UNITS": "LINEAR_POWER",
+        "SOURCE_RASTER": raster_path.name,
+        "SOURCE_HEADER": header_path.name,
+        "PROCESSING_SOFTWARE": "DANSAR",
+    }
+
+    if metadata is not None:
+        dataset_tags["UAVSAR_ANNOTATION_JSON"] = json.dumps(
+            metadata,
+            ensure_ascii=False,
+            separators=(",", ":"),
+        )
+
     temporary_header = None
 
     try:
+        # Use the helper already present in make_tiff.py.
         temporary_header = prepare_explicit_envi_header(
             raster_path=raster_path,
             header_path=header_path,
@@ -266,38 +275,13 @@ def make_tiff(
                 compress=compress,
                 predictor=2,
                 BIGTIFF="IF_SAFER",
+                NUM_THREADS="ALL_CPUS",
             )
 
-            polarization = _infer_polarization(
-                raster_path.name
-            )
-
-            dataset_tags = {
-                "MISSION": "UAVSAR",
-                "SENSOR": "UAVSAR",
-                "PRODUCT_TYPE": "GRD",
-                "SOURCE_RASTER": raster_path.name,
-                "SOURCE_HEADER": header_path.name,
-                "DATA_TYPE": "FLOAT32",
-                "DATA_UNITS": "LINEAR_POWER",
-                "PROCESSING_SOFTWARE": "DANSAR",
-            }
-
-            if polarization is not None:
-                dataset_tags["POLARIZATION"] = polarization
-
-            if metadata is not None:
-                # Complete lossless representation of the parsed annotation.
-                dataset_tags["UAVSAR_ANNOTATION_JSON"] = json.dumps(
-                    metadata,
-                    ensure_ascii=False,
-                    separators=(",", ":"),
-                )
-
-                # Individual searchable fields.
-                dataset_tags.update(
-                    _flatten_metadata(metadata)
-                )
+            # Explicitly preserve spatial information from the source.
+            profile.pop("transform", None)
+            profile["transform"] = src.transform
+            profile["crs"] = src.crs
 
             with rasterio.open(
                 final_tiff,
@@ -309,23 +293,15 @@ def make_tiff(
                 # Dataset-level metadata.
                 dst.update_tags(**dataset_tags)
 
-                # Band-level semantic metadata.
-                band_description = (
-                    polarization
-                    if polarization is not None
-                    else raster_path.stem
-                )
-
+                # Band-level description and units.
                 dst.set_band_description(
                     1,
-                    band_description,
+                    polarization,
                 )
 
                 dst.update_tags(
                     1,
-                    POLARIZATION=(
-                        polarization or "UNKNOWN"
-                    ),
+                    POLARIZATION=polarization,
                     DATA_UNITS="LINEAR_POWER",
                     LONG_NAME=(
                         "UAVSAR calibrated ground-range "
