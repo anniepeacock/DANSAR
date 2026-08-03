@@ -1,60 +1,52 @@
 import argparse
 import json
 import re
-from copy import deepcopy
 from pathlib import Path
-
-
-DEFAULT_RASTER_EXTENSIONS = (
-    ".grd",
-    ".hgt",
-    ".inc",
-    ".slope",
-    ".slc",
-    ".mlc",
-    ".dat",
-    ".lks",
-)
 
 
 def _normalize_key(key):
     """
-    Convert UAVSAR annotation labels into simple JSON keys.
+    Convert a UAVSAR annotation label into a stable JSON key.
     """
 
     key = key.strip()
     key = re.sub(r"[^A-Za-z0-9_.]+", "_", key)
     key = re.sub(r"_+", "_", key)
-    key = key.strip("_")
-    return key.lower()
+    return key.strip("_").lower()
 
 
-def annotation_to_nested_json_dict(ann_text, include_global=True):
+def annotation_to_nested_json_dict(
+    ann_text,
+    include_global=True,
+):
     """
-    Parse UAVSAR annotation text into a nested metadata dictionary.
+    Parse UAVSAR annotation text into one complete nested dictionary.
 
-    This parser treats the UAVSAR annotation file as line-based metadata.
+    Grouped keys such as:
 
-    It skips:
-        - blank lines
-        - full-line comments starting with ;
+        grd_pwr.set_rows = 13275
 
-    It also removes inline comments after semicolons, for example:
+    become:
 
-        grd_pwr.set_rows (pixels) = 13275 ; GRD Lines
+        {
+            "grd_pwr": {
+                "set_rows": "13275"
+            }
+        }
 
-    becomes:
-
-        {"grd_pwr": {"set_rows": "13275"}}
+    Ungrouped fields are stored under "global" when include_global=True.
     """
 
     if not isinstance(ann_text, str):
         raise TypeError(
-            f"ann_text must be a string, not {type(ann_text).__name__}"
+            f"ann_text must be a string, "
+            f"not {type(ann_text).__name__}"
         )
 
     if not ann_text.strip():
-        raise ValueError("ann_text is empty or contains only whitespace.")
+        raise ValueError(
+            "ann_text is empty or contains only whitespace."
+        )
 
     metadata = {"global": {}}
 
@@ -73,116 +65,67 @@ def annotation_to_nested_json_dict(ann_text, include_global=True):
 
     parsed_fields = 0
 
-    try:
-        for raw_line in ann_text.splitlines():
-            line = raw_line.strip()
+    for raw_line in ann_text.splitlines():
+        line = raw_line.strip()
 
-            if not line:
-                continue
+        if not line or line.startswith(";"):
+            continue
 
-            if line.startswith(";"):
-                continue
+        # Everything after a semicolon is a comment.
+        line = line.split(";", 1)[0].strip()
 
-            # Remove inline comments.
-            # Example:
-            # grd_pwr.set_rows (pixels) = 13275 ; GRD Lines
-            line = line.split(";", 1)[0].strip()
+        if not line or "=" not in line:
+            continue
 
-            if not line or "=" not in line:
-                continue
+        match = line_pattern.match(line)
 
-            match = line_pattern.match(line)
+        if not match:
+            continue
 
-            if not match:
-                continue
+        key = _normalize_key(match.group("key"))
+        value = match.group("value").strip()
 
-            key = _normalize_key(match.group("key"))
-            value = match.group("value").strip()
+        if not key:
+            continue
 
-            if not key:
-                continue
+        if "." in key:
+            group, field = key.split(".", 1)
+            metadata.setdefault(group, {})
+            metadata[group][field] = value
 
-            if "." in key:
-                group, field = key.split(".", 1)
-                metadata.setdefault(group, {})
-                metadata[group][field] = value
+        elif include_global:
+            metadata["global"][key] = value
 
-            elif include_global:
-                metadata["global"][key] = value
+        parsed_fields += 1
 
-            parsed_fields += 1
+    if parsed_fields == 0:
+        raise ValueError(
+            "No valid UAVSAR annotation fields were found."
+        )
 
-        if parsed_fields == 0:
-            raise ValueError(
-                "No valid UAVSAR annotation fields were found in ann_text."
-            )
+    if not metadata["global"]:
+        metadata.pop("global")
 
-        if not metadata["global"]:
-            metadata.pop("global")
-
-        return metadata
-
-    except ValueError:
-        raise
-
-    except Exception as exc:
-        raise RuntimeError(
-            "Unexpected error while parsing UAVSAR annotation text."
-        ) from exc
-
-
-def _clean_annotation_value(value):
-    """
-    Remove whitespace and matching quotes from an annotation value.
-    """
-
-    value = str(value).strip()
-
-    if (
-        len(value) >= 2
-        and value[0] == value[-1]
-        and value[0] in {'"', "'"}
-    ):
-        value = value[1:-1].strip()
-
-    return value
-
-
-def _is_raster_filename(value, raster_extensions):
-    """
-    Return True when an annotation value looks like a raster filename.
-    """
-
-    value = _clean_annotation_value(value)
-
-    if not value:
-        return False
-
-    suffixes = tuple(extension.lower() for extension in raster_extensions)
-    return value.lower().endswith(suffixes)
+    return metadata
 
 
 def annotation_to_file_json_dicts(
     ann_text,
     include_global=True,
-    raster_extensions=DEFAULT_RASTER_EXTENSIONS,
     annotation_filename=None,
+    output_json=None,
+    indent=2,
+    overwrite=False,
 ):
     """
-    Parse one UAVSAR annotation file into one metadata dictionary per raster.
+    Return one complete nested metadata dictionary for an annotation file.
 
-    The existing nested parser remains the source of truth. This function
-    finds fields whose values reference raster files and produces a smaller
-    dictionary for each one.
+    Despite the historical function name, this function does not try to
+    discover raster filenames inside annotation values. It parses and returns
+    every metadata group in the annotation.
 
-    Each output dictionary contains:
-        - "file": identity of the specific raster
-        - "global": acquisition-level metadata, when requested and available
-        - the relevant metadata group, such as "grd_pwr" or "hgt"
-
-    Within the relevant group, sibling raster filename fields are removed.
-    Shared fields such as set_rows, set_cols, row_addr, col_addr, row_mult,
-    and col_mult remain available for header generation.
+    The returned dictionary can remain purely in memory. If output_json is
+    provided, the same complete dictionary is also serialized to disk.
 
     Parameters
     ----------
@@ -190,24 +133,24 @@ def annotation_to_file_json_dicts(
         Full text of a UAVSAR .ann file.
 
     include_global : bool
-        Include ungrouped acquisition metadata in every file dictionary.
+        Include ungrouped fields under "global".
 
-    raster_extensions : iterable[str]
-        Filename extensions treated as raster products.
+    annotation_filename : str, pathlib.Path, or None
+        Optional source annotation filename recorded under "annotation".
 
-    annotation_filename : str or pathlib.Path or None
-        Optional source annotation filename recorded in the "file" section.
+    output_json : str, pathlib.Path, or None
+        Optional path for saving the complete JSON document.
+
+    indent : int or None
+        JSON indentation used when output_json is supplied.
+
+    overwrite : bool
+        Permit replacement of an existing output_json.
 
     Returns
     -------
-    dict[str, dict]
-        Mapping from raster filename to its file-specific metadata dictionary.
-
-        Example key:
-            product_HHHH.grd
-
-        The corresponding JSON filename can therefore be:
-            product_HHHH.grd.json
+    dict
+        Complete nested metadata dictionary containing all annotation groups.
     """
 
     metadata = annotation_to_nested_json_dict(
@@ -215,177 +158,68 @@ def annotation_to_file_json_dicts(
         include_global=include_global,
     )
 
-    global_metadata = metadata.get("global")
-    file_metadata = {}
-
-    for group_name, group_values in metadata.items():
-        if group_name == "global":
-            continue
-
-        if not isinstance(group_values, dict):
-            continue
-
-        raster_fields = {
-            field_name: _clean_annotation_value(field_value)
-            for field_name, field_value in group_values.items()
-            if _is_raster_filename(field_value, raster_extensions)
+    if annotation_filename is not None:
+        metadata = {
+            "annotation": {
+                "filename": Path(annotation_filename).name,
+            },
+            **metadata,
         }
 
-        if not raster_fields:
-            continue
+    if output_json is not None:
+        output_json = Path(output_json)
 
-        shared_group_metadata = {
-            field_name: deepcopy(field_value)
-            for field_name, field_value in group_values.items()
-            if field_name not in raster_fields
-        }
-
-        for field_name, raster_filename in raster_fields.items():
-            if raster_filename in file_metadata:
-                previous_key = file_metadata[raster_filename]["file"][
-                    "annotation_key"
-                ]
-                current_key = f"{group_name}.{field_name}"
-
-                raise ValueError(
-                    "The same raster filename is referenced more than once "
-                    f"in the annotation file: {raster_filename!r}. "
-                    f"Found at {previous_key!r} and {current_key!r}."
-                )
-
-            output_metadata = {
-                "file": {
-                    "raster_filename": raster_filename,
-                    "json_filename": f"{raster_filename}.json",
-                    "annotation_group": group_name,
-                    "annotation_field": field_name,
-                    "annotation_key": f"{group_name}.{field_name}",
-                }
-            }
-
-            if annotation_filename is not None:
-                output_metadata["file"]["annotation_filename"] = Path(
-                    annotation_filename
-                ).name
-
-            if include_global and global_metadata:
-                output_metadata["global"] = deepcopy(global_metadata)
-
-            output_metadata[group_name] = {
-                **deepcopy(shared_group_metadata),
-                field_name: raster_filename,
-            }
-
-            file_metadata[raster_filename] = output_metadata
-
-    if not file_metadata:
-        extensions_text = ", ".join(raster_extensions)
-        raise ValueError(
-            "No raster filenames were found in the annotation metadata. "
-            f"Expected values ending in one of: {extensions_text}"
-        )
-
-    return file_metadata
-
-
-def write_file_jsons(
-    file_metadata,
-    output_dir,
-    indent=2,
-    overwrite=False,
-):
-    """
-    Write one JSON file per raster.
-
-    Output naming is intentionally direct:
-
-        raster.grd -> raster.grd.json
-
-    This allows later processing steps to find the JSON with:
-
-        Path(str(raster_path) + ".json")
-    """
-
-    if not isinstance(file_metadata, dict):
-        raise TypeError(
-            "file_metadata must be a dictionary, "
-            f"not {type(file_metadata).__name__}"
-        )
-
-    if not file_metadata:
-        raise ValueError("file_metadata is empty.")
-
-    output_dir = Path(output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    output_paths = []
-
-    for raster_filename, metadata in file_metadata.items():
-        output_path = output_dir / f"{Path(raster_filename).name}.json"
-
-        if output_path.exists() and not overwrite:
+        if output_json.exists() and not overwrite:
             raise FileExistsError(
-                f"Output JSON already exists: {output_path}. "
-                "Use overwrite=True or --overwrite to replace it."
+                f"Output JSON already exists: {output_json}. "
+                "Use overwrite=True to replace it."
             )
 
-        json_text = json.dumps(
-            metadata,
-            indent=indent,
-            ensure_ascii=False,
+        output_json.parent.mkdir(
+            parents=True,
+            exist_ok=True,
         )
 
-        output_path.write_text(
-            json_text + "\n",
+        output_json.write_text(
+            json.dumps(
+                metadata,
+                indent=indent,
+                ensure_ascii=False,
+            )
+            + "\n",
             encoding="utf-8",
         )
 
-        output_paths.append(output_path)
-
-    return output_paths
+    return metadata
 
 
 def main():
     parser = argparse.ArgumentParser(
         description=(
-            "Parse a UAVSAR .ann annotation file into nested JSON metadata. "
-            "By default, one complete JSON document is printed or written. "
-            "Use --split-by-file to write one JSON file per raster product."
+            "Parse a UAVSAR annotation file into one complete "
+            "nested JSON document containing all metadata groups."
         )
     )
 
     parser.add_argument(
         "annotation_file",
-        help="Path to the UAVSAR .ann annotation file.",
+        help="Path to the UAVSAR .ann file.",
     )
 
-    output_group = parser.add_mutually_exclusive_group()
-
-    output_group.add_argument(
+    parser.add_argument(
         "-o",
         "--output",
+        default=None,
         help=(
-            "Optional output JSON file for the complete nested metadata. "
-            "If omitted, the complete JSON is printed to the terminal."
-        ),
-    )
-
-    output_group.add_argument(
-        "--split-by-file",
-        metavar="OUTPUT_DIR",
-        help=(
-            "Write one JSON file per raster referenced by the annotation. "
-            "Files are named raster_filename.ext.json."
+            "Optional path for saving the complete JSON. "
+            "If omitted, JSON is printed to the terminal."
         ),
     )
 
     parser.add_argument(
         "--no-global",
         action="store_true",
-        help=(
-            "Exclude ungrouped acquisition metadata. "
-            "Grouped layer metadata is still retained."
-        ),
+        help="Exclude ungrouped annotation fields.",
     )
 
     parser.add_argument(
@@ -398,9 +232,7 @@ def main():
     parser.add_argument(
         "--overwrite",
         action="store_true",
-        help=(
-            "Allow --split-by-file to overwrite existing JSON files."
-        ),
+        help="Overwrite an existing output JSON.",
     )
 
     args = parser.parse_args()
@@ -408,57 +240,32 @@ def main():
     annotation_path = Path(args.annotation_file)
 
     if not annotation_path.exists():
-        raise FileNotFoundError(f"File not found: {annotation_path}")
+        raise FileNotFoundError(
+            f"Annotation file not found: {annotation_path}"
+        )
 
     if not annotation_path.is_file():
         raise ValueError(
             f"Annotation path is not a file: {annotation_path}"
         )
 
-    ann_text = annotation_path.read_text(encoding="utf-8")
-
-    if args.split_by_file:
-        file_metadata = annotation_to_file_json_dicts(
-            ann_text,
-            include_global=not args.no_global,
-            annotation_filename=annotation_path.name,
-        )
-
-        output_paths = write_file_jsons(
-            file_metadata,
-            output_dir=args.split_by_file,
-            indent=args.indent,
-            overwrite=args.overwrite,
-        )
-
-        print(f"Wrote {len(output_paths)} file-specific JSON file(s):")
-
-        for output_path in output_paths:
-            print(f"  - {output_path}")
-
-        return
-
-    metadata = annotation_to_nested_json_dict(
-        ann_text,
+    metadata = annotation_to_file_json_dicts(
+        annotation_path.read_text(encoding="utf-8"),
         include_global=not args.no_global,
-    )
-
-    json_text = json.dumps(
-        metadata,
+        annotation_filename=annotation_path.name,
+        output_json=args.output,
         indent=args.indent,
-        ensure_ascii=False,
+        overwrite=args.overwrite,
     )
 
-    if args.output:
-        output_path = Path(args.output)
-        output_path.write_text(
-            json_text + "\n",
-            encoding="utf-8",
+    if args.output is None:
+        print(
+            json.dumps(
+                metadata,
+                indent=args.indent,
+                ensure_ascii=False,
+            )
         )
-        print(f"Wrote parsed metadata to: {output_path}")
-
-    else:
-        print(json_text)
 
 
 if __name__ == "__main__":
