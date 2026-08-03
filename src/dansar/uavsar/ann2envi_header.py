@@ -1,7 +1,12 @@
 import argparse
 import sys
 from pathlib import Path
-from dansar.uavsar.annotation_to_nested_json_dict import annotation_to_nested_json_dict
+
+from dansar.uavsar.annotation_to_nested_json_dict import (
+    annotation_to_file_json_dicts,
+    annotation_to_nested_json_dict,
+    write_file_jsons,
+)
 
 
 UAVSAR_TO_ENVI_DTYPE = {
@@ -27,8 +32,8 @@ def get_envi_byte_order(metadata, group_metadata):
     Get ENVI byte order code from UAVSAR metadata.
 
     ENVI byte order:
-        0 = little endian
-        1 = big endian
+      0 = little endian
+      1 = big endian
     """
 
     global_metadata = metadata.get("global", {})
@@ -57,9 +62,14 @@ def ann2envi_header(
     ann_path,
     group,
     output_hdr,
+    save_json=True,
+    json_output_dir=None,
 ):
     """
     Create an ENVI .hdr file directly from a UAVSAR .ann annotation file.
+
+    By default, this also writes one file-specific JSON per raster referenced
+    by the annotation file. These JSON files are later read by make_tiff.py.
 
     Parameters
     ----------
@@ -79,6 +89,14 @@ def ann2envi_header(
     output_hdr : str or pathlib.Path
         Output ENVI header path.
 
+    save_json : bool
+        If True, write one JSON file per raster referenced in the annotation.
+        Default: True.
+
+    json_output_dir : str or pathlib.Path or None
+        Directory for file-specific JSON files. When omitted, JSON files are
+        written beside output_hdr.
+
     Returns
     -------
     pathlib.Path
@@ -95,19 +113,40 @@ def ann2envi_header(
         raise ValueError(f"Annotation path is not a file: {ann_path}")
 
     if not isinstance(group, str):
-        raise TypeError(f"group must be a string, not {type(group).__name__}")
+        raise TypeError(
+            f"group must be a string, not {type(group).__name__}"
+        )
 
     group = group.strip()
 
     if not group:
         raise ValueError("group is empty or contains only whitespace.")
 
-    ann_text = ann_path.read_text()
+    ann_text = ann_path.read_text(encoding="utf-8")
 
     metadata = annotation_to_nested_json_dict(
         ann_text,
         include_global=True,
     )
+
+    if save_json:
+        file_metadata = annotation_to_file_json_dicts(
+            ann_text,
+            include_global=True,
+            annotation_filename=ann_path.name,
+        )
+
+        if json_output_dir is None:
+            json_output_dir = output_hdr.parent
+        else:
+            json_output_dir = Path(json_output_dir)
+
+        write_file_jsons(
+            file_metadata,
+            output_dir=json_output_dir,
+            indent=2,
+            overwrite=True,
+        )
 
     if group not in metadata:
         raise KeyError(
@@ -141,6 +180,7 @@ def ann2envi_header(
 
     lines = int(float(group_metadata["set_rows"]))
     samples = int(float(group_metadata["set_cols"]))
+
     projection = group_metadata["set_proj"].strip()
 
     row_addr = float(group_metadata["row_addr"])
@@ -157,7 +197,10 @@ def ann2envi_header(
         )
 
     envi_dtype = UAVSAR_TO_ENVI_DTYPE[val_frmt]
-    envi_byte_order = get_envi_byte_order(metadata, group_metadata)
+    envi_byte_order = get_envi_byte_order(
+        metadata,
+        group_metadata,
+    )
 
     header_lines = [
         "ENVI",
@@ -196,8 +239,15 @@ def ann2envi_header(
         header_lines.append(map_info)
         header_lines.append(coordinate_system)
 
-    output_hdr.parent.mkdir(parents=True, exist_ok=True)
-    output_hdr.write_text("\n".join(header_lines) + "\n")
+    output_hdr.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    output_hdr.write_text(
+        "\n".join(header_lines) + "\n",
+        encoding="utf-8",
+    )
 
     return output_hdr
 
@@ -205,8 +255,9 @@ def ann2envi_header(
 def main():
     parser = argparse.ArgumentParser(
         description=(
-            "Create an ENVI .hdr file directly from a UAVSAR .ann annotation file. "
-            "The annotation is parsed using annotation_to_nested_json_dict.py."
+            "Create an ENVI .hdr file directly from a UAVSAR .ann annotation "
+            "file. By default, one file-specific JSON is also written for "
+            "each raster referenced in the annotation."
         )
     )
 
@@ -234,6 +285,21 @@ def main():
         help="Output ENVI .hdr file path.",
     )
 
+    parser.add_argument(
+        "--json-output-dir",
+        default=None,
+        help=(
+            "Optional directory for the file-specific JSON files. "
+            "Default: the output header directory."
+        ),
+    )
+
+    parser.add_argument(
+        "--no-json",
+        action="store_true",
+        help="Do not write file-specific JSON metadata files.",
+    )
+
     args = parser.parse_args()
 
     try:
@@ -241,9 +307,20 @@ def main():
             ann_path=args.annotation,
             group=args.group,
             output_hdr=args.output_hdr,
+            save_json=not args.no_json,
+            json_output_dir=args.json_output_dir,
         )
 
         print(f"Wrote ENVI header: {hdr_path}")
+
+        if not args.no_json:
+            json_dir = (
+                Path(args.json_output_dir)
+                if args.json_output_dir is not None
+                else Path(args.output_hdr).parent
+            )
+            print(f"Wrote file-specific JSON files to: {json_dir}")
+
         return 0
 
     except Exception as exc:
