@@ -1,11 +1,11 @@
 import argparse
+import json
 import sys
 from pathlib import Path
 
 from dansar.uavsar.annotation_to_nested_json_dict import (
     annotation_to_file_json_dicts,
     annotation_to_nested_json_dict,
-    write_file_jsons,
 )
 
 
@@ -28,135 +28,28 @@ UAVSAR_TO_ENVI_DTYPE = {
 
 
 def get_envi_byte_order(metadata, group_metadata):
-    """
-    Get ENVI byte order code from UAVSAR metadata.
-
-    ENVI byte order:
-      0 = little endian
-      1 = big endian
-    """
-
+    """Return ENVI byte-order code: 0=little endian, 1=big endian."""
     global_metadata = metadata.get("global", {})
-
-    byte_order_text = (
+    text = (
         group_metadata.get("val_endi")
         or global_metadata.get("val_endi")
         or "LITTLE ENDIAN"
-    )
+    ).strip().upper()
 
-    byte_order_text = byte_order_text.strip().upper()
-
-    if "LITTLE ENDIAN" in byte_order_text:
+    if "LITTLE ENDIAN" in text:
         return 0
-
-    if "BIG ENDIAN" in byte_order_text:
+    if "BIG ENDIAN" in text:
         return 1
 
     raise ValueError(
-        f"Unsupported byte order: {byte_order_text}. "
+        f"Unsupported byte order: {text}. "
         "Expected LITTLE ENDIAN or BIG ENDIAN."
     )
 
 
-def ann2envi_header(
-    ann_path,
-    group,
-    output_hdr,
-    save_json=True,
-    json_output_dir=None,
-):
-    """
-    Create an ENVI .hdr file directly from a UAVSAR .ann annotation file.
-
-    By default, this also writes one file-specific JSON per raster referenced
-    by the annotation file. These JSON files are later read by make_tiff.py.
-
-    Parameters
-    ----------
-    ann_path : str or pathlib.Path
-        Path to UAVSAR .ann annotation file.
-
-    group : str
-        Metadata group to use from the parsed annotation.
-
-        Common values:
-            grd_pwr
-            inc
-            hgt
-            slope
-            mlc_pwr
-
-    output_hdr : str or pathlib.Path
-        Output ENVI header path.
-
-    save_json : bool
-        If True, write one JSON file per raster referenced in the annotation.
-        Default: True.
-
-    json_output_dir : str or pathlib.Path or None
-        Directory for file-specific JSON files. When omitted, JSON files are
-        written beside output_hdr.
-
-    Returns
-    -------
-    pathlib.Path
-        Path to written ENVI header file.
-    """
-
-    ann_path = Path(ann_path)
-    output_hdr = Path(output_hdr)
-
-    if not ann_path.exists():
-        raise FileNotFoundError(f"Annotation file not found: {ann_path}")
-
-    if not ann_path.is_file():
-        raise ValueError(f"Annotation path is not a file: {ann_path}")
-
-    if not isinstance(group, str):
-        raise TypeError(
-            f"group must be a string, not {type(group).__name__}"
-        )
-
-    group = group.strip()
-
-    if not group:
-        raise ValueError("group is empty or contains only whitespace.")
-
-    ann_text = ann_path.read_text(encoding="utf-8")
-
-    metadata = annotation_to_nested_json_dict(
-        ann_text,
-        include_global=True,
-    )
-
-    if save_json:
-        file_metadata = annotation_to_file_json_dicts(
-            ann_text,
-            include_global=True,
-            annotation_filename=ann_path.name,
-        )
-
-        if json_output_dir is None:
-            json_output_dir = output_hdr.parent
-        else:
-            json_output_dir = Path(json_output_dir)
-
-        write_file_jsons(
-            file_metadata,
-            output_dir=json_output_dir,
-            indent=2,
-            overwrite=True,
-        )
-
-    if group not in metadata:
-        raise KeyError(
-            f"Group '{group}' was not found in annotation metadata. "
-            f"Available groups: {sorted(metadata.keys())}"
-        )
-
-    group_metadata = metadata[group]
-
-    required_fields = [
+def _build_header_text(ann_path, group, metadata, group_metadata):
+    """Build the ENVI header text shared by all rasters in one group."""
+    required = [
         "set_rows",
         "set_cols",
         "set_proj",
@@ -166,41 +59,26 @@ def ann2envi_header(
         "col_mult",
         "val_frmt",
     ]
-
-    missing_fields = [
-        field
-        for field in required_fields
-        if field not in group_metadata
-    ]
-
-    if missing_fields:
+    missing = [field for field in required if field not in group_metadata]
+    if missing:
         raise KeyError(
-            f"Group '{group}' is missing required fields: {missing_fields}"
+            f"Group '{group}' is missing required fields: {missing}"
         )
 
     lines = int(float(group_metadata["set_rows"]))
     samples = int(float(group_metadata["set_cols"]))
-
     projection = group_metadata["set_proj"].strip()
-
     row_addr = float(group_metadata["row_addr"])
     col_addr = float(group_metadata["col_addr"])
     row_mult = float(group_metadata["row_mult"])
     col_mult = float(group_metadata["col_mult"])
-
     val_frmt = group_metadata["val_frmt"].strip().upper()
 
     if val_frmt not in UAVSAR_TO_ENVI_DTYPE:
         raise ValueError(
             f"Unsupported UAVSAR val_frmt: {val_frmt}. "
-            f"Known formats: {sorted(UAVSAR_TO_ENVI_DTYPE.keys())}"
+            f"Known formats: {sorted(UAVSAR_TO_ENVI_DTYPE)}"
         )
-
-    envi_dtype = UAVSAR_TO_ENVI_DTYPE[val_frmt]
-    envi_byte_order = get_envi_byte_order(
-        metadata,
-        group_metadata,
-    )
 
     header_lines = [
         "ENVI",
@@ -210,119 +88,169 @@ def ann2envi_header(
         "bands = 1",
         "header offset = 0",
         "file type = ENVI Standard",
-        f"data type = {envi_dtype}",
+        f"data type = {UAVSAR_TO_ENVI_DTYPE[val_frmt]}",
         "interleave = bsq",
-        f"byte order = {envi_byte_order}",
+        f"byte order = {get_envi_byte_order(metadata, group_metadata)}",
     ]
 
     if projection.upper() == "EQA":
-        pixel_size_x = abs(col_mult)
-        pixel_size_y = abs(row_mult)
-
-        map_info = (
+        header_lines.append(
             "map info = {Geographic Lat/Lon, "
             f"1.0, 1.0, {col_addr}, {row_addr}, "
-            f"{pixel_size_x}, {pixel_size_y}, WGS-84"
-            "}"
+            f"{abs(col_mult)}, {abs(row_mult)}, WGS-84}}"
+        )
+        header_lines.append(
+            'coordinate system string = {'
+            'GEOGCS["WGS 84",'
+            'DATUM["WGS_1984",'
+            'SPHEROID["WGS 84",6378137,298.257223563]],'
+            'PRIMEM["Greenwich",0],'
+            'UNIT["degree",0.0174532925199433]]'
+            '}'
         )
 
-        coordinate_system = (
-            "coordinate system string = {"
-            "GEOGCS[\"WGS 84\","
-            "DATUM[\"WGS_1984\","
-            "SPHEROID[\"WGS 84\",6378137,298.257223563]],"
-            "PRIMEM[\"Greenwich\",0],"
-            "UNIT[\"degree\",0.0174532925199433]]"
-            "}"
+    return "\n".join(header_lines) + "\n"
+
+
+def ann2envi_header(
+    ann_path,
+    group,
+    output_dir,
+    save_json=True,
+    overwrite=False,
+):
+    """
+    Create one .hdr and, optionally, one .json per raster in a group.
+
+    Example for group='grd_pwr':
+        product_HHHH.grd.hdr
+        product_HHHH.grd.json
+        product_HVHV.grd.hdr
+        product_HVHV.grd.json
+        product_VVVV.grd.hdr
+        product_VVVV.grd.json
+    """
+    ann_path = Path(ann_path)
+    output_dir = Path(output_dir)
+
+    if not ann_path.is_file():
+        raise FileNotFoundError(f"Annotation file not found: {ann_path}")
+
+    group = str(group).strip()
+    if not group:
+        raise ValueError("group is empty")
+
+    ann_text = ann_path.read_text(encoding="utf-8")
+    metadata = annotation_to_nested_json_dict(
+        ann_text,
+        include_global=True,
+    )
+
+    if group not in metadata:
+        raise KeyError(
+            f"Group '{group}' not found. "
+            f"Available groups: {sorted(metadata)}"
         )
 
-        header_lines.append(map_info)
-        header_lines.append(coordinate_system)
-
-    output_hdr.parent.mkdir(
-        parents=True,
-        exist_ok=True,
+    file_metadata = annotation_to_file_json_dicts(
+        ann_text,
+        include_global=True,
+        annotation_filename=ann_path.name,
     )
 
-    output_hdr.write_text(
-        "\n".join(header_lines) + "\n",
-        encoding="utf-8",
+    group_files = {
+        raster_name: item
+        for raster_name, item in file_metadata.items()
+        if item.get("file", {}).get("annotation_group") == group
+    }
+
+    if not group_files:
+        raise ValueError(
+            f"No raster files were found for annotation group '{group}'."
+        )
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    header_text = _build_header_text(
+        ann_path=ann_path,
+        group=group,
+        metadata=metadata,
+        group_metadata=metadata[group],
     )
 
-    return output_hdr
+    results = []
+
+    for raster_name, raster_metadata in group_files.items():
+        raster_name = Path(raster_name).name
+        header_path = output_dir / f"{raster_name}.hdr"
+        json_path = output_dir / f"{raster_name}.json"
+
+        outputs = [header_path]
+        if save_json:
+            outputs.append(json_path)
+
+        existing = [path for path in outputs if path.exists()]
+        if existing and not overwrite:
+            raise FileExistsError(
+                "Output file(s) already exist: "
+                + ", ".join(str(path) for path in existing)
+                + ". Use overwrite=True."
+            )
+
+        header_path.write_text(header_text, encoding="utf-8")
+
+        written_json = None
+        if save_json:
+            json_path.write_text(
+                json.dumps(
+                    raster_metadata,
+                    indent=2,
+                    ensure_ascii=False,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            written_json = json_path
+
+        results.append(
+            {
+                "raster_name": raster_name,
+                "header_path": header_path,
+                "json_path": written_json,
+            }
+        )
+
+    return results
 
 
 def main():
     parser = argparse.ArgumentParser(
         description=(
-            "Create an ENVI .hdr file directly from a UAVSAR .ann annotation "
-            "file. By default, one file-specific JSON is also written for "
-            "each raster referenced in the annotation."
+            "Create one ENVI header and optional JSON per raster in a "
+            "UAVSAR annotation group."
         )
     )
-
-    parser.add_argument(
-        "-ann",
-        "--annotation",
-        required=True,
-        help="Path to UAVSAR .ann annotation file.",
-    )
-
-    parser.add_argument(
-        "-group",
-        "--group",
-        required=True,
-        help=(
-            "Annotation metadata group to use. "
-            "Examples: grd_pwr, inc, hgt, slope, mlc_pwr."
-        ),
-    )
-
-    parser.add_argument(
-        "-output_hdr",
-        "--output-hdr",
-        required=True,
-        help="Output ENVI .hdr file path.",
-    )
-
-    parser.add_argument(
-        "--json-output-dir",
-        default=None,
-        help=(
-            "Optional directory for the file-specific JSON files. "
-            "Default: the output header directory."
-        ),
-    )
-
-    parser.add_argument(
-        "--no-json",
-        action="store_true",
-        help="Do not write file-specific JSON metadata files.",
-    )
-
+    parser.add_argument("-ann", "--annotation", required=True)
+    parser.add_argument("-group", "--group", required=True)
+    parser.add_argument("-output_dir", "--output-dir", required=True)
+    parser.add_argument("--no-json", action="store_true")
+    parser.add_argument("--overwrite", action="store_true")
     args = parser.parse_args()
 
     try:
-        hdr_path = ann2envi_header(
+        results = ann2envi_header(
             ann_path=args.annotation,
             group=args.group,
-            output_hdr=args.output_hdr,
+            output_dir=args.output_dir,
             save_json=not args.no_json,
-            json_output_dir=args.json_output_dir,
+            overwrite=args.overwrite,
         )
 
-        print(f"Wrote ENVI header: {hdr_path}")
-
-        if not args.no_json:
-            json_dir = (
-                Path(args.json_output_dir)
-                if args.json_output_dir is not None
-                else Path(args.output_hdr).parent
-            )
-            print(f"Wrote file-specific JSON files to: {json_dir}")
+        for result in results:
+            print(f"HDR:  {result['header_path']}")
+            if result["json_path"] is not None:
+                print(f"JSON: {result['json_path']}")
 
         return 0
-
     except Exception as exc:
         print(f"\nERROR: {exc}", file=sys.stderr)
         return 1
