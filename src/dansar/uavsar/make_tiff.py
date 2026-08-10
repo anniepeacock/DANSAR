@@ -2,6 +2,7 @@ import argparse
 import json
 import shutil
 import sys
+import tempfile
 from pathlib import Path
 
 
@@ -288,10 +289,11 @@ def make_tiff(
     extension=".tif",
     compress="DEFLATE",
     block_size=512,
+    overview_resampling="AVERAGE",
     metadata_json_path=None,
 ):
     """
-    Convert a UAVSAR ENVI raster to a single-band tiled GeoTIFF.
+    Convert a UAVSAR ENVI raster to a single-band Cloud Optimized GeoTIFF.
 
     The sibling JSON used to construct the ENVI header is also the sole
     source for the compact GeoTIFF publication metadata.
@@ -346,6 +348,28 @@ def make_tiff(
             "block_size must be greater than zero."
         )
 
+    overview_resampling = str(
+        overview_resampling
+    ).strip().upper()
+
+    allowed_overview_resampling = {
+        "NEAREST",
+        "AVERAGE",
+        "BILINEAR",
+        "CUBIC",
+        "CUBICSPLINE",
+        "LANCZOS",
+        "MODE",
+        "RMS",
+    }
+
+    if overview_resampling not in allowed_overview_resampling:
+        raise ValueError(
+            "Unsupported overview resampling method: "
+            f"{overview_resampling}. "
+            f"Choose one of: {sorted(allowed_overview_resampling)}"
+        )
+
     metadata, _ = read_metadata_json(
         raster_path=raster_path,
         metadata_json_path=metadata_json_path,
@@ -372,6 +396,9 @@ def make_tiff(
             f"Output file already exists: {final_tiff}. "
             "Use --overwrite to replace it."
         )
+
+    if final_tiff.exists() and overwrite:
+        final_tiff.unlink()
 
     temporary_header = None
 
@@ -412,6 +439,9 @@ def make_tiff(
 
             profile = src.profile.copy()
 
+            # Write the cleaned full-resolution raster to a temporary tiled
+            # GeoTIFF. The final output is created by GDAL's COG driver so
+            # the image data and overview IFDs are ordered for cloud access.
             profile.update(
                 driver="GTiff",
                 dtype="float32",
@@ -421,26 +451,51 @@ def make_tiff(
                 blockxsize=block_size,
                 blockysize=block_size,
                 compress=compress,
-                predictor=2,
+                predictor=3,
                 BIGTIFF="IF_SAFER",
             )
 
-            with rasterio.open(
-                final_tiff,
-                "w",
-                **profile,
-            ) as dst:
-                dst.write(arr, 1)
-                dst.update_tags(
-                    **geotiff_tags
+            with tempfile.TemporaryDirectory(
+                dir=output_dir
+            ) as temp_dir:
+                temp_tiff = (
+                    Path(temp_dir)
+                    / f"{raster_path.stem}_fullres.tif"
                 )
 
-                if clip_min is not None:
+                with rasterio.open(
+                    temp_tiff,
+                    "w",
+                    **profile,
+                ) as dst:
+                    dst.write(arr, 1)
                     dst.update_tags(
-                        UAVSAR_VALID_DATA_CLIP_MIN=str(
-                            clip_min
-                        )
+                        **geotiff_tags
                     )
+
+                    if clip_min is not None:
+                        dst.update_tags(
+                            UAVSAR_VALID_DATA_CLIP_MIN=str(
+                                clip_min
+                            )
+                        )
+
+                from rasterio.shutil import copy as rio_copy
+
+                rio_copy(
+                    temp_tiff,
+                    final_tiff,
+                    driver="COG",
+                    BLOCKSIZE=block_size,
+                    COMPRESS=compress,
+                    PREDICTOR="FLOATING_POINT",
+                    BIGTIFF="IF_SAFER",
+                    OVERVIEWS="IGNORE_EXISTING",
+                    OVERVIEW_RESAMPLING=overview_resampling,
+                    OVERVIEW_COMPRESS=compress,
+                    OVERVIEW_PREDICTOR="FLOATING_POINT",
+                    NUM_THREADS="ALL_CPUS",
+                )
 
         return final_tiff
 
@@ -462,8 +517,9 @@ def make_tiffs(
     extension=".tif",
     compress="DEFLATE",
     block_size=512,
+    overview_resampling="AVERAGE",
 ):
-    """Convert multiple raster/header pairs to GeoTIFF."""
+    """Convert multiple raster/header pairs to Cloud Optimized GeoTIFF."""
     if not raster_header_pairs:
         raise ValueError(
             "No raster/header pairs were provided."
@@ -485,6 +541,7 @@ def make_tiffs(
                 extension=extension,
                 compress=compress,
                 block_size=block_size,
+                overview_resampling=overview_resampling,
             )
         )
 
@@ -511,7 +568,7 @@ def _parse_nodata(value):
 def main():
     parser = argparse.ArgumentParser(
         description=(
-            "Convert UAVSAR ENVI rasters to tiled/compressed GeoTIFFs. "
+            "Convert UAVSAR ENVI rasters to Cloud Optimized GeoTIFFs with internal overviews. "
             "Each raster must have a sibling JSON named raster.ext.json."
         )
     )
@@ -585,6 +642,25 @@ def main():
         default=512,
     )
 
+    parser.add_argument(
+        "--overview-resampling",
+        default="AVERAGE",
+        choices=[
+            "NEAREST",
+            "AVERAGE",
+            "BILINEAR",
+            "CUBIC",
+            "CUBICSPLINE",
+            "LANCZOS",
+            "MODE",
+            "RMS",
+        ],
+        help=(
+            "Resampling used to build internal COG overviews. "
+            "Default: AVERAGE."
+        ),
+    )
+
     args = parser.parse_args()
 
     try:
@@ -612,6 +688,7 @@ def main():
             extension=args.extension,
             compress=args.compress,
             block_size=args.block_size,
+            overview_resampling=args.overview_resampling,
         )
 
         print(
