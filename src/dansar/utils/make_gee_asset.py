@@ -161,23 +161,35 @@ def build_manifest(
         tiff_path,
     )
 
-    property_keys = (
-        "GRANULE_ID",
-        "PRODUCT_TYPE",
-        "UNITS",
-        "CENTER_LATITUDE",
-        "CENTER_LONGITUDE",
-        "ORIGINAL_PIXEL_POSTING_LATITUDE",
-        "ORIGINAL_PIXEL_POSTING_LONGITUDE",
-        "PIXEL_POSTING_UNITS",
-        "DATA_ACCESS",
-    )
+    # Keep Earth Engine properties short and readable.
+    # The GeoTIFF header remains the source of truth.
+    property_map = {
+        "GRANULE_ID": "granule_id",
+        "PRODUCT_TYPE": "product_type",
+        "UNITS": "units",
+        "CENTER_LATITUDE": "center_latitude",
+        "CENTER_LONGITUDE": "center_longitude",
+        "ORIGINAL_PIXEL_POSTING_LATITUDE": "pixel_posting_latitude",
+        "ORIGINAL_PIXEL_POSTING_LONGITUDE": "pixel_posting_longitude",
+        "PIXEL_POSTING_UNITS": "pixel_posting_units",
+        "DATA_ACCESS": "data_access",
+    }
 
     properties = {
-        key: tags[key]
-        for key in property_keys
-        if key in tags
+        ee_key: tags[tiff_key]
+        for tiff_key, ee_key in property_map.items()
+        if tiff_key in tags
     }
+
+    product_type = tags.get("PRODUCT_TYPE", "UAVSAR raster")
+    units = tags.get("UNITS")
+
+    description = f"UAVSAR {product_type} image"
+    if units:
+        description += f"; units: {units}"
+    description += "."
+
+    properties["description"] = description
 
     return {
         "name": (
@@ -219,7 +231,7 @@ def write_manifest(
     granule_id = manifest[
         "properties"
     ][
-        "GRANULE_ID"
+        "granule_id"
     ]
 
     path = (
