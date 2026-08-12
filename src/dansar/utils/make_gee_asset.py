@@ -208,6 +208,14 @@ def build_manifest(
                 ],
             }
         ],
+        "bands": [
+            {
+                "id": "B0",
+                "tilesetId": "source",
+                "tilesetBandIndex": 0,
+                "pyramidingPolicy": "MEAN",
+            }
+        ],
         "properties": properties,
         "startTime": to_iso8601(
             acquisition_date
