@@ -271,7 +271,7 @@ def create_ee_asset(
         [
             earthengine,
             "upload",
-            "external_image",
+            "image",
             "--manifest",
             str(manifest_path),
         ],
