@@ -1,2 +1,2 @@
 # DANSAR
-Repo for SAR Exploration Notebooks 
+Data Application Notebooks with Synthetic Aperture Radar
