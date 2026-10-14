@@ -14,7 +14,7 @@ def infer_uavsar_paths(base_url, product_name):
         Example:
             https://uavsar.asf.alaska.edu/
 
-    product_name : str
+     : str
         UAVSAR product base name from the annotation file.
 
         Example:
@@ -66,7 +66,7 @@ def infer_uavsar_paths(base_url, product_name):
             f"Could not find L-band token in product name: {base_lband}"
         )
 
-    product_dir_name = f"UA_{product_name}"
+    product_dir_name = product_name
     product_dir_url = f"{base_url.rstrip('/')}/{product_dir_name}"
 
     def make_grd_filename(polarization):
