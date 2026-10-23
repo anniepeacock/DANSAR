@@ -9,6 +9,7 @@ from pathlib import Path
 PRODUCT_UNITS = {
     "GRD": "Backscatter in linear power, unitless",
     "HGT": "Height in meters",
+    "INC": "Local incidence angle in degrees",
 }
 
 DATA_ACCESS = (
@@ -498,6 +499,482 @@ def make_tiff(
                 )
 
         return final_tiff
+
+    finally:
+        if temporary_header is not None:
+            temporary_header.unlink(
+                missing_ok=True
+            )
+
+def make_inc_mask_tiffs(
+    inc_path,
+    header_path,
+    output_dir,
+    overwrite=False,
+    extension=".tif",
+    compress="DEFLATE",
+    block_size=512,
+    metadata_json_path=None,
+    valid_inc_min=20.0,
+    valid_inc_max=70.0,
+):
+    """
+    Convert a UAVSAR incidence-angle raster to two uint8 COGs:
+
+    1. INC:
+       Local incidence angle converted from radians to degrees
+       and rounded to the nearest integer.
+
+       Values:
+           0-254 = incidence angle in degrees
+           255   = NoData
+
+    2. MASK:
+       Per-pixel QA mask.
+
+       Values:
+           1 = valid
+           2 = invalid incidence angle
+           3 = no data
+
+    The validity thresholds are applied to the original
+    floating-point incidence angle before rounding.
+
+    Parameters
+    ----------
+    inc_path : str or pathlib.Path
+        UAVSAR .inc raster.
+
+    header_path : str or pathlib.Path
+        ENVI header corresponding to the .inc raster.
+
+    output_dir : str or pathlib.Path
+        Directory where output COGs will be written.
+
+    overwrite : bool, optional
+        Replace existing outputs.
+
+    extension : str, optional
+        GeoTIFF extension. Default ".tif".
+
+    compress : str, optional
+        COG compression method. Default "DEFLATE".
+
+    block_size : int, optional
+        COG tile size. Default 512.
+
+    metadata_json_path : str or pathlib.Path, optional
+        Explicit metadata JSON path.
+
+    valid_inc_min : float, optional
+        Minimum valid incidence angle in degrees.
+        Default 20.
+
+    valid_inc_max : float, optional
+        Maximum valid incidence angle in degrees.
+        Default 70.
+
+    Returns
+    -------
+    tuple[pathlib.Path, pathlib.Path]
+        (inc_tiff, mask_tiff)
+    """
+
+    try:
+        import numpy as np
+        import rasterio
+        from rasterio.shutil import copy as rio_copy
+    except ModuleNotFoundError as exc:
+        raise ModuleNotFoundError(
+            "make_inc_mask_tiffs requires numpy and rasterio."
+        ) from exc
+
+    inc_path = Path(inc_path)
+    header_path = Path(header_path)
+    output_dir = Path(output_dir)
+
+    if not inc_path.is_file():
+        raise FileNotFoundError(
+            f"INC raster file not found: {inc_path}"
+        )
+
+    if not header_path.is_file():
+        raise FileNotFoundError(
+            f"INC header file not found: {header_path}"
+        )
+
+    if not extension.startswith("."):
+        extension = "." + extension
+
+    if not isinstance(block_size, int):
+        raise TypeError(
+            f"block_size must be an integer, "
+            f"not {type(block_size).__name__}"
+        )
+
+    if block_size <= 0:
+        raise ValueError(
+            "block_size must be greater than zero."
+        )
+
+    valid_inc_min = float(valid_inc_min)
+    valid_inc_max = float(valid_inc_max)
+
+    if valid_inc_min >= valid_inc_max:
+        raise ValueError(
+            "valid_inc_min must be smaller than "
+            "valid_inc_max."
+        )
+
+    metadata, _ = read_metadata_json(
+        raster_path=inc_path,
+        metadata_json_path=metadata_json_path,
+    )
+
+    geotiff_tags = build_geotiff_tags(
+        metadata
+    )
+
+    output_dir.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    #
+    # Use explicit names because the source .inc stem does
+    # not itself contain "INC".
+    #
+    inc_tiff = (
+        output_dir
+        / f"{inc_path.stem}_INC{extension}"
+    )
+
+    mask_tiff = (
+        output_dir
+        / f"{inc_path.stem}_MASK{extension}"
+    )
+
+    for output_path in (
+        inc_tiff,
+        mask_tiff,
+    ):
+        if output_path.exists():
+            if not overwrite:
+                raise FileExistsError(
+                    f"Output file already exists: "
+                    f"{output_path}. "
+                    "Use overwrite=True to replace it."
+                )
+
+            output_path.unlink()
+
+    temporary_header = None
+
+    try:
+        temporary_header = prepare_explicit_envi_header(
+            raster_path=inc_path,
+            header_path=header_path,
+        )
+
+        with rasterio.open(inc_path) as src:
+
+            #
+            # Keep the original floating-point values for
+            # determining validity.
+            #
+            inc_rad = src.read(1).astype(
+                "float32",
+                copy=True,
+            )
+
+            #
+            # UAVSAR INC is in radians.
+            #
+            inc_deg = np.degrees(
+                inc_rad
+            )
+
+            #
+            # Determine where an actual incidence-angle
+            # observation exists.
+            #
+            # Zero or negative incidence angles do not
+            # represent observed UAVSAR ground pixels and
+            # are treated as outside-swath NoData.
+            #
+            observed = (
+                np.isfinite(inc_rad)
+                & (inc_rad > 0.0)
+            )
+
+            if src.nodata is not None:
+                if np.isfinite(src.nodata):
+                    observed &= (
+                        inc_rad != src.nodata
+                    )
+                else:
+                    observed &= np.isfinite(
+                        inc_rad
+                    )
+
+            #
+            # -------------------------------------------------
+            # INC
+            # -------------------------------------------------
+            #
+
+            inc_uint8 = np.full(
+                inc_deg.shape,
+                255,
+                dtype=np.uint8,
+            )
+
+            rounded_inc = np.rint(
+                inc_deg[observed]
+            )
+
+            #
+            # Sanity check before casting to uint8.
+            #
+            if np.any(
+                (rounded_inc < 0)
+                | (rounded_inc > 254)
+            ):
+                raise ValueError(
+                    "Observed incidence-angle values fall "
+                    "outside the uint8 range reserved for "
+                    "valid INC values (0-254 degrees)."
+                )
+
+            inc_uint8[observed] = (
+                rounded_inc.astype(
+                    np.uint8
+                )
+            )
+
+            #
+            # -------------------------------------------------
+            # MASK
+            # -------------------------------------------------
+            #
+            # 1 = valid
+            # 2 = invalid incidence angle
+            # 3 = no data
+            #
+
+            mask = np.full(
+                inc_deg.shape,
+                3,
+                dtype=np.uint8,
+            )
+
+            valid = (
+                observed
+                & (inc_deg >= valid_inc_min)
+                & (inc_deg <= valid_inc_max)
+            )
+
+            invalid = (
+                observed
+                & ~valid
+            )
+
+            mask[valid] = 1
+            mask[invalid] = 2
+
+            #
+            # Start from the INC source georeferencing.
+            #
+            base_profile = src.profile.copy()
+
+        #
+        # Metadata for INC.
+        #
+        inc_tags = geotiff_tags.copy()
+
+        inc_tags.update(
+            {
+                "PRODUCT_TYPE": "INC",
+                "UNITS": "degrees",
+                "DESCRIPTION": (
+                    "UAVSAR local incidence angle "
+                    "converted from radians to degrees "
+                    "and rounded to nearest integer"
+                ),
+                "NODATA_VALUE": "255",
+            }
+        )
+
+        #
+        # Metadata for MASK.
+        #
+        mask_tags = geotiff_tags.copy()
+
+        mask_tags.update(
+            {
+                "PRODUCT_TYPE": "MASK",
+                "UNITS": "categorical",
+                "DESCRIPTION": (
+                    "UAVSAR per-pixel data quality mask"
+                ),
+                "MASK_VALUE_1": "valid",
+                "MASK_VALUE_2": (
+                    "invalid_incidence_angle"
+                ),
+                "MASK_VALUE_3": "no_data",
+                "VALID_INC_MIN_DEGREES": str(
+                    valid_inc_min
+                ),
+                "VALID_INC_MAX_DEGREES": str(
+                    valid_inc_max
+                ),
+            }
+        )
+
+        #
+        # Temporary files are converted through GDAL's COG
+        # driver, matching the existing make_tiff workflow.
+        #
+        with tempfile.TemporaryDirectory(
+            dir=output_dir
+        ) as temp_dir:
+
+            temp_dir = Path(temp_dir)
+
+            #
+            # ================================================
+            # INC COG
+            # ================================================
+            #
+
+            inc_profile = (
+                base_profile.copy()
+            )
+
+            inc_profile.update(
+                driver="GTiff",
+                dtype="uint8",
+                count=1,
+                nodata=255,
+                tiled=True,
+                blockxsize=block_size,
+                blockysize=block_size,
+                compress=compress,
+                predictor=2,
+                BIGTIFF="IF_SAFER",
+            )
+
+            temp_inc = (
+                temp_dir
+                / f"{inc_path.stem}_INC_fullres.tif"
+            )
+
+            with rasterio.open(
+                temp_inc,
+                "w",
+                **inc_profile,
+            ) as dst:
+                dst.write(
+                    inc_uint8,
+                    1,
+                )
+
+                dst.set_band_description(
+                    1,
+                    "INC",
+                )
+
+                dst.update_tags(
+                    **inc_tags
+                )
+
+            rio_copy(
+                temp_inc,
+                inc_tiff,
+                driver="COG",
+                BLOCKSIZE=block_size,
+                COMPRESS=compress,
+                PREDICTOR="STANDARD",
+                BIGTIFF="IF_SAFER",
+                OVERVIEWS="IGNORE_EXISTING",
+                OVERVIEW_RESAMPLING="AVERAGE",
+                OVERVIEW_COMPRESS=compress,
+                OVERVIEW_PREDICTOR="STANDARD",
+                NUM_THREADS="ALL_CPUS",
+            )
+
+            #
+            # ================================================
+            # MASK COG
+            # ================================================
+            #
+
+            mask_profile = (
+                base_profile.copy()
+            )
+
+            mask_profile.update(
+                driver="GTiff",
+                dtype="uint8",
+                count=1,
+
+                # IMPORTANT:
+                # MASK class 3 is semantically NoData,
+                # but it is still a meaningful QA class.
+                # Do not mark class 3 as GDAL NoData.
+                nodata=None,
+
+                tiled=True,
+                blockxsize=block_size,
+                blockysize=block_size,
+                compress=compress,
+                predictor=2,
+                BIGTIFF="IF_SAFER",
+            )
+
+            temp_mask = (
+                temp_dir
+                / f"{inc_path.stem}_MASK_fullres.tif"
+            )
+
+            with rasterio.open(
+                temp_mask,
+                "w",
+                **mask_profile,
+            ) as dst:
+                dst.write(
+                    mask,
+                    1,
+                )
+
+                dst.set_band_description(
+                    1,
+                    "MASK",
+                )
+
+                dst.update_tags(
+                    **mask_tags
+                )
+
+            rio_copy(
+                temp_mask,
+                mask_tiff,
+                driver="COG",
+                BLOCKSIZE=block_size,
+                COMPRESS=compress,
+                PREDICTOR="STANDARD",
+                BIGTIFF="IF_SAFER",
+                OVERVIEWS="IGNORE_EXISTING",
+
+                # MASK is categorical.
+                OVERVIEW_RESAMPLING="NEAREST",
+
+                OVERVIEW_COMPRESS=compress,
+                OVERVIEW_PREDICTOR="STANDARD",
+                NUM_THREADS="ALL_CPUS",
+            )
+
+        return inc_tiff, mask_tiff
 
     finally:
         if temporary_header is not None:

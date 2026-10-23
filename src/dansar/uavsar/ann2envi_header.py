@@ -53,6 +53,12 @@ GROUP_PRODUCTS = {
         "polarizations": ("HHHV", "HHVV", "HVVV"),
         "extension": ".mlc",
     },
+    
+    # Ancillary ground-range incidence angle raster
+    "inc": {
+        "polarizations": None,
+        "extension": ".inc",
+    },
 }
 
 
@@ -130,6 +136,32 @@ def _insert_polarization(product_stem, polarization):
 def _derive_raster_names(ann_path, group):
     """
     Derive raster filenames for a supported annotation group.
+
+    Parameters
+    ----------
+    ann_path : str or pathlib.Path
+        Path to the UAVSAR annotation file.
+
+    group : str
+        Annotation/product group name, such as:
+        'grd_pwr', 'grd_mag', 'grd_phase',
+        'mlc_pwr', 'mlc_mag', 'mlc_phase',
+        or 'inc'.
+
+    Returns
+    -------
+    list of tuple
+        Each tuple contains:
+
+            (polarization, raster_filename)
+
+        For non-polarimetric ancillary products such as INC,
+        polarization is returned as None.
+
+    Raises
+    ------
+    ValueError
+        If the requested group is not supported.
     """
 
     if group not in GROUP_PRODUCTS:
@@ -141,6 +173,21 @@ def _derive_raster_names(ann_path, group):
     product_stem = _product_stem_from_annotation(ann_path)
     product_info = GROUP_PRODUCTS[group]
 
+    polarizations = product_info["polarizations"]
+    extension = product_info["extension"]
+
+    # Ancillary rasters such as incidence angle do not
+    # include a polarization code in their filename.
+    if polarizations is None:
+        return [
+            (
+                None,
+                product_stem + extension,
+            )
+        ]
+
+    # Polarimetric products include the polarization code
+    # immediately after the L-band look-direction token.
     return [
         (
             polarization,
@@ -148,9 +195,9 @@ def _derive_raster_names(ann_path, group):
                 product_stem,
                 polarization,
             )
-            + product_info["extension"],
+            + extension,
         )
-        for polarization in product_info["polarizations"]
+        for polarization in polarizations
     ]
 
 
