@@ -64,17 +64,34 @@ def make_asf_session(username=None, password=None):
     if not password:
         raise ValueError("Earthdata password is empty.")
 
-    try:
-        session = asf.ASFSession()
-        session.auth_with_creds(username, password)
+try:
+    session = asf.ASFSession()
+    session.auth_with_creds(username, password)
 
-    except Exception as exc:
-        raise RuntimeError(
-            "ASF/Earthdata authentication failed. "
-            "Check your username, password, and network connection."
-        ) from exc
+except Exception as exc:
+    raise RuntimeError(
+        "ASF/Earthdata authentication failed. "
+        "Check your username, password, and network connection."
+    ) from exc
 
-    return session
+
+try:
+    response = session.get(
+        "https://cumulus.asf.alaska.edu/s3credentials"
+    )
+
+    response.raise_for_status()
+
+    aws_credentials = response.json()
+
+except Exception as exc:
+    raise RuntimeError(
+        "ASF authentication succeeded, but temporary "
+        "AWS S3 credentials could not be retrieved."
+    ) from exc
+
+
+return session, aws_credentials
 
 
 def main():
