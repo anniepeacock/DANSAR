@@ -1,5 +1,6 @@
-## DANSAR
-# Installation
+# DANSAR - Data Application Notebooks with Synthetic Aperture Radar
+
+## Installation
 
 The instructions below are for Linux or macOS systems using Conda for package management.
 
@@ -27,7 +28,7 @@ conda activate DANSAR
 conda env list
 ```
 
-If you with to run Jupyter notebooks, set the kernel:
+If you wish to run Jupyter notebooks, set the kernel:
 ```bash
 python -m ipykernel install --user \
     --name dansar \
