@@ -20,7 +20,7 @@ Workflow:
     local COG directory
         -> upload each COG to GCS
         -> build one 5-band EE manifest per acquisition
-        -> earthengine upload image --manifest ...
+        -> submit the manifest via the Earth Engine Python API
 
 By default, the script uses credentials configured outside it. To use a
 Google service account for both GCS and Earth Engine, pass the JSON key path
@@ -39,14 +39,12 @@ Typical Colab usage after authentication:
 
 import argparse
 import json
-import shutil
-import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-import rasterio
 import ee
+import rasterio
 from google.cloud import storage
 
 
@@ -836,37 +834,17 @@ def write_manifest(
 
 
 # ---------------------------------------------------------------------
-# Earth Engine CLI
+# Earth Engine ingestion
 # ---------------------------------------------------------------------
 
-def create_ee_asset(
-    manifest_path,
-    *,
-    service_account_file=None,
-    project=None,
-):
-    """
-    Create one ingested Earth Engine image asset.
-    """
+def create_ee_asset(manifest_path):
+    """Submit an image ingestion using the initialized Earth Engine client."""
+    with Path(manifest_path).open(encoding="utf-8") as source:
+        manifest = json.load(source)
 
-    earthengine = shutil.which(
-        "earthengine"
-    )
-
-    if earthengine is None:
-        raise FileNotFoundError(
-            "earthengine CLI not found. "
-            "Install earthengine-api."
-        )
-
-    command = [earthengine]
-    if project is not None:
-        command.extend(["--project", project])
-    if service_account_file is not None:
-        command.extend(["--service_account_file", str(service_account_file)])
-
-    command.extend(["upload", "image", "--manifest", str(manifest_path)])
-    subprocess.run(command, check=True)
+    request_id = ee.data.newTaskId()[0]
+    operation = ee.data.startIngestion(request_id, manifest)
+    print("Started upload task with ID:", operation["id"])
 
 
 # ---------------------------------------------------------------------
@@ -901,8 +879,8 @@ def make_gee_assets(
     service_account_file optionally supplies a Google service account JSON
     key for both GCS and Earth Engine. project optionally sets the Google
     Cloud project used by both clients. asset_parent sets the asset location.
-    Set skip_existing=True after initializing the Earth Engine Python client
-    to skip acquisitions whose asset names already exist under asset_parent.
+    Set skip_existing=True to skip acquisitions whose asset names already
+    exist under asset_parent.
     """
 
     input_dir = Path(
@@ -960,6 +938,15 @@ def make_gee_assets(
     results = []
 
     asset_parent = str(asset_parent).rstrip("/")
+    if not dry_run or skip_existing:
+        if service_account_file is not None:
+            credentials = ee.ServiceAccountCredentials(
+                key_file=str(service_account_file)
+            )
+            ee.Initialize(credentials=credentials, project=client.project)
+        elif project is not None or not ee.data.is_initialized():
+            ee.Initialize(project=project)
+
     existing_names = set()
     if skip_existing:
         response = ee.data.listAssets({"parent": asset_parent, "view": "BASIC"})
@@ -1060,11 +1047,7 @@ def make_gee_assets(
                 manifest["name"],
             )
 
-            create_ee_asset(
-                manifest_path,
-                service_account_file=service_account_file,
-                project=project,
-            )
+            create_ee_asset(manifest_path)
 
         results.append(
             manifest["name"]
@@ -1156,7 +1139,7 @@ def main():
 
     parser.add_argument(
         "--project",
-        help="Google Cloud project ID for the GCS client and Earth Engine CLI.",
+        help="Google Cloud project ID for the GCS and Earth Engine clients.",
     )
 
     args = parser.parse_args()
