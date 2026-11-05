@@ -22,7 +22,9 @@ Workflow:
         -> build one 5-band EE manifest per acquisition
         -> earthengine upload image --manifest ...
 
-Authentication is intentionally external to this script.
+By default, the script uses credentials configured outside it. To use a
+Google service account for both GCS and Earth Engine, pass the JSON key path
+as service_account_file and the Google Cloud project ID as project.
 
 Typical Colab usage after authentication:
 
@@ -44,6 +46,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import rasterio
+import ee
 from google.cloud import storage
 
 
@@ -838,6 +841,9 @@ def write_manifest(
 
 def create_ee_asset(
     manifest_path,
+    *,
+    service_account_file=None,
+    project=None,
 ):
     """
     Create one ingested Earth Engine image asset.
@@ -853,16 +859,14 @@ def create_ee_asset(
             "Install earthengine-api."
         )
 
-    subprocess.run(
-        [
-            earthengine,
-            "upload",
-            "image",
-            "--manifest",
-            str(manifest_path),
-        ],
-        check=True,
-    )
+    command = [earthengine]
+    if project is not None:
+        command.extend(["--project", project])
+    if service_account_file is not None:
+        command.extend(["--service_account_file", str(service_account_file)])
+
+    command.extend(["upload", "image", "--manifest", str(manifest_path)])
+    subprocess.run(command, check=True)
 
 
 # ---------------------------------------------------------------------
@@ -877,6 +881,10 @@ def make_gee_assets(
     manifest_dir=None,
     overwrite_gcs=False,
     dry_run=False,
+    *,
+    service_account_file=None,
+    project=None,
+    skip_existing=False,
 ):
     """
     Create one 5-band ingested Earth Engine image per UAVSAR
@@ -889,6 +897,12 @@ def make_gee_assets(
         VV
         INC
         MASK
+
+    service_account_file optionally supplies a Google service account JSON
+    key for both GCS and Earth Engine. project optionally sets the Google
+    Cloud project used by both clients. asset_parent sets the asset location.
+    Set skip_existing=True after initializing the Earth Engine Python client
+    to skip acquisitions whose asset names already exist under asset_parent.
     """
 
     input_dir = Path(
@@ -909,7 +923,15 @@ def make_gee_assets(
         cogs
     )
 
-    client = storage.Client()
+    if service_account_file is None:
+        client = storage.Client(project=project)
+    else:
+        service_account_file = Path(service_account_file).expanduser().resolve(
+            strict=True
+        )
+        client = storage.Client.from_service_account_json(
+            str(service_account_file), project=project
+        )
 
     bucket_info = client.get_bucket(
         bucket
@@ -937,12 +959,23 @@ def make_gee_assets(
 
     results = []
 
+    asset_parent = str(asset_parent).rstrip("/")
+    existing_names = set()
+    if skip_existing:
+        response = ee.data.listAssets({"parent": asset_parent, "view": "BASIC"})
+        existing_names = {asset["name"] for asset in response["assets"]}
+
     for (
         acquisition_id,
         group,
     ) in sorted(
         groups.items()
     ):
+
+        asset_name = f"{asset_parent}/{acquisition_id}"
+        if asset_name in existing_names:
+            print("Earth Engine asset exists, skipping:", asset_name)
+            continue
 
         print()
         print(
@@ -1028,7 +1061,9 @@ def make_gee_assets(
             )
 
             create_ee_asset(
-                manifest_path
+                manifest_path,
+                service_account_file=service_account_file,
+                project=project,
             )
 
         results.append(
@@ -1113,6 +1148,17 @@ def main():
         ),
     )
 
+    parser.add_argument(
+        "--service-account-file",
+        type=Path,
+        help="Path to a Google service account JSON key for GCS and Earth Engine.",
+    )
+
+    parser.add_argument(
+        "--project",
+        help="Google Cloud project ID for the GCS client and Earth Engine CLI.",
+    )
+
     args = parser.parse_args()
 
     try:
@@ -1125,6 +1171,8 @@ def main():
             manifest_dir=args.manifest_dir,
             overwrite_gcs=args.overwrite_gcs,
             dry_run=args.dry_run,
+            service_account_file=args.service_account_file,
+            project=args.project,
         )
 
         print()
