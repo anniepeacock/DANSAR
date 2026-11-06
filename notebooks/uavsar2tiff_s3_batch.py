@@ -61,6 +61,10 @@ def process_product(product_id, out_dir):
     if not ann_path.exists():
         raise FileNotFoundError(f"Missing annotation: {ann_path}")
 
+    inc_path = out_dir / f"{product_id}.inc"
+    if not inc_path.is_file():
+        raise FileNotFoundError(f"Missing incidence-angle raster: {inc_path}")
+
     grd_files = []
     for pol in ("HHHH", "HVHV", "VVVV"):
         matches = sorted(out_dir.glob(f"{prefix}{pol}_*.grd"))
@@ -75,7 +79,7 @@ def process_product(product_id, out_dir):
         group="grd_pwr",
         output_dir=out_dir,
         save_json=True,
-        overwrite=False,
+        overwrite=True,
     )
 
     ann2envi_header(
@@ -83,7 +87,8 @@ def process_product(product_id, out_dir):
         group="inc",
         output_dir=out_dir,
         save_json=True,
-        overwrite=False,
+        overwrite=True,
+        infer_inc_from_grd=True,
     )
 
     for grd_path in grd_files:
@@ -99,7 +104,6 @@ def process_product(product_id, out_dir):
             extension=".tif",
         )
 
-    inc_path = out_dir / f"{product_id}.inc"
     make_inc_mask_tiffs(
         inc_path=inc_path,
         header_path=Path(str(inc_path) + ".hdr"),
