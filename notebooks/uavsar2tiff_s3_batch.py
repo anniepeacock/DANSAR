@@ -3,6 +3,7 @@ import argparse
 import csv
 import os
 import subprocess
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import numpy as np
@@ -12,12 +13,49 @@ from dansar.uavsar.make_tiff import make_tiff, make_inc_mask_tiffs
 from dansar.utils.make_asf_session import make_asf_session
 
 
-def setup_aws():
-    _, creds = make_asf_session()
-    os.environ["AWS_ACCESS_KEY_ID"] = creds["accessKeyId"]
-    os.environ["AWS_SECRET_ACCESS_KEY"] = creds["secretAccessKey"]
-    os.environ["AWS_SESSION_TOKEN"] = creds["sessionToken"]
-    os.environ["AWS_DEFAULT_REGION"] = "us-west-2"
+class AsfS3Credentials:
+    def __init__(self):
+        self.session, self.credentials = make_asf_session()
+
+    def refresh(self):
+        response = self.session.get(
+            "https://cumulus.asf.alaska.edu/s3credentials", timeout=30
+        )
+        response.raise_for_status()
+        self.credentials = response.json()
+
+    def sync(self, command):
+        expires_at = datetime.fromisoformat(
+            self.credentials["expiration"].replace("Z", "+00:00")
+        )
+        if expires_at <= datetime.now(timezone.utc) + timedelta(minutes=5):
+            self.refresh()
+
+        for attempt in range(2):
+            result = subprocess.run(
+                command,
+                env={
+                    **os.environ,
+                    "AWS_ACCESS_KEY_ID": self.credentials["accessKeyId"],
+                    "AWS_SECRET_ACCESS_KEY": self.credentials["secretAccessKey"],
+                    "AWS_SESSION_TOKEN": self.credentials["sessionToken"],
+                    "AWS_DEFAULT_REGION": "us-west-2",
+                },
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            if result.returncode == 0:
+                return
+
+            error = result.stderr.strip()
+            if attempt == 0 and (
+                "expiredtoken" in error.lower() or "token has expired" in error.lower()
+            ):
+                self.refresh()
+                continue
+            raise RuntimeError(
+                f"aws s3 sync failed (exit {result.returncode}): {error}"
+            )
 
 
 def cleanup(product_id, out_dir):
@@ -34,7 +72,7 @@ def cleanup(product_id, out_dir):
             path.unlink(missing_ok=True)
 
 
-def process_product(product_id, out_dir):
+def process_product(product_id, out_dir, s3_credentials):
     product_id = product_id.strip()
     prefix = product_id.replace("_CX_01", "")
 
@@ -43,7 +81,7 @@ def process_product(product_id, out_dir):
         f"UAVSAR/UAVSAR_POLSAR/{product_id}"
     )
 
-    subprocess.run(
+    s3_credentials.sync(
         [
             "aws", "s3", "sync", s3_prefix, str(out_dir),
             "--exclude", "*",
@@ -53,8 +91,7 @@ def process_product(product_id, out_dir):
             "--include", "*VVVV*.grd",
             "--include", "*.inc",
             "--only-show-errors",
-        ],
-        check=True,
+        ]
     )
 
     ann_path = out_dir / f"{product_id}.ann"
@@ -133,7 +170,7 @@ def main():
         if line.strip() and not line.lstrip().startswith("#")
     ]
 
-    setup_aws()
+    s3_credentials = AsfS3Credentials()
 
     with args.log.open("w", newline="") as f:
         writer = csv.writer(f)
@@ -142,7 +179,7 @@ def main():
         for product_id in product_ids:
             print(f"\n{product_id}")
             try:
-                process_product(product_id, args.output_dir)
+                process_product(product_id, args.output_dir, s3_credentials)
                 writer.writerow([product_id, "SUCCESS", ""])
                 print("SUCCESS")
             except Exception as exc:
