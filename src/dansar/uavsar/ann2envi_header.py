@@ -307,6 +307,8 @@ def ann2envi_header(
     output_dir,
     save_json=True,
     overwrite=False,
+    *,
+    infer_inc_from_grd=False,
 ):
     """
     Create one ENVI header and optional JSON per raster in a group.
@@ -322,6 +324,8 @@ def ann2envi_header(
 
     The annotation is parsed once into one complete in-memory dictionary.
     The selected group is then reused for all rasters in that group.
+    Set infer_inc_from_grd=True to generate INC headers when the
+    annotation lacks INC metadata but the raster uses the GRD grid.
     """
 
     ann_path = Path(ann_path)
@@ -352,6 +356,7 @@ def ann2envi_header(
         ann_text,
         include_global=True,
         annotation_filename=ann_path.name,
+        infer_inc_from_grd=infer_inc_from_grd,
     )
 
     if group not in metadata:
@@ -502,6 +507,12 @@ def main():
         help="Overwrite existing output files.",
     )
 
+    parser.add_argument(
+        "--infer-inc-from-grd",
+        action="store_true",
+        help="Use the GRD grid to synthesize a missing INC group.",
+    )
+
     args = parser.parse_args()
 
     try:
@@ -511,6 +522,7 @@ def main():
             output_dir=args.output_dir,
             save_json=not args.no_json,
             overwrite=args.overwrite,
+            infer_inc_from_grd=args.infer_inc_from_grd,
         )
 
         print(

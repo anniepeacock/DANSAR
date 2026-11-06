@@ -18,6 +18,8 @@ def _normalize_key(key):
 def annotation_to_nested_json_dict(
     ann_text,
     include_global=True,
+    *,
+    infer_inc_from_grd=False,
 ):
     """
     Parse UAVSAR annotation text into one complete nested dictionary.
@@ -35,6 +37,8 @@ def annotation_to_nested_json_dict(
         }
 
     Ungrouped fields are stored under "global" when include_global=True.
+    With infer_inc_from_grd=True, a missing "inc" group uses the GRD grid
+    and the UAVSAR PolSAR incidence-angle binary format.
     """
 
     if not isinstance(ann_text, str):
@@ -106,6 +110,27 @@ def annotation_to_nested_json_dict(
     if not metadata["global"]:
         metadata.pop("global")
 
+    if infer_inc_from_grd and "inc" not in metadata:
+        grid_fields = (
+            "set_rows", "set_cols", "set_proj",
+            "row_addr", "col_addr", "row_mult", "col_mult",
+        )
+        for group in ("grd_pwr", "grd_mag", "grd_phase"):
+            grd = metadata.get(group, {})
+            if all(grd.get(field) for field in grid_fields):
+                metadata["inc"] = {
+                    **{field: grd[field] for field in grid_fields},
+                    "val_frmt": "REAL*4",
+                    "val_endi": "LITTLE ENDIAN",
+                    "inferred_from": group,
+                }
+                break
+        else:
+            raise ValueError(
+                "Cannot infer INC metadata without a complete GRD grid "
+                "in grd_pwr, grd_mag, or grd_phase."
+            )
+
     return metadata
 
 
@@ -116,6 +141,8 @@ def annotation_to_file_json_dicts(
     output_json=None,
     indent=2,
     overwrite=False,
+    *,
+    infer_inc_from_grd=False,
 ):
     """
     Return one complete nested metadata dictionary for an annotation file.
@@ -147,6 +174,9 @@ def annotation_to_file_json_dicts(
     overwrite : bool
         Permit replacement of an existing output_json.
 
+    infer_inc_from_grd : bool
+        Use the GRD grid to synthesize a missing INC group.
+
     Returns
     -------
     dict
@@ -156,6 +186,7 @@ def annotation_to_file_json_dicts(
     metadata = annotation_to_nested_json_dict(
         ann_text,
         include_global=include_global,
+        infer_inc_from_grd=infer_inc_from_grd,
     )
 
     if annotation_filename is not None:
@@ -235,6 +266,12 @@ def main():
         help="Overwrite an existing output JSON.",
     )
 
+    parser.add_argument(
+        "--infer-inc-from-grd",
+        action="store_true",
+        help="Use the GRD grid to synthesize a missing INC group.",
+    )
+
     args = parser.parse_args()
 
     annotation_path = Path(args.annotation_file)
@@ -256,6 +293,7 @@ def main():
         output_json=args.output,
         indent=args.indent,
         overwrite=args.overwrite,
+        infer_inc_from_grd=args.infer_inc_from_grd,
     )
 
     if args.output is None:
