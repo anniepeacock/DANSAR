@@ -441,8 +441,8 @@ def make_tiff(
             profile = src.profile.copy()
 
             # Write the cleaned full-resolution raster to a temporary tiled
-            # GeoTIFF. The final output is created by GDAL's COG driver so
-            # the image data and overview IFDs are ordered for cloud access.
+            # GeoTIFF using parallel compression. GDAL's COG driver orders
+            # the final image data and overview IFDs for cloud access.
             profile.update(
                 driver="GTiff",
                 dtype="float32",
@@ -454,6 +454,7 @@ def make_tiff(
                 compress=compress,
                 predictor=3,
                 BIGTIFF="IF_SAFER",
+                NUM_THREADS="ALL_CPUS",
             )
 
             with tempfile.TemporaryDirectory(
@@ -862,6 +863,7 @@ def make_inc_mask_tiffs(
                 compress=compress,
                 predictor=2,
                 BIGTIFF="IF_SAFER",
+                NUM_THREADS="ALL_CPUS",
             )
 
             temp_inc = (
@@ -930,6 +932,7 @@ def make_inc_mask_tiffs(
                 compress=compress,
                 predictor=2,
                 BIGTIFF="IF_SAFER",
+                NUM_THREADS="ALL_CPUS",
             )
 
             temp_mask = (
