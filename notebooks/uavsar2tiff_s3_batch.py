@@ -5,6 +5,7 @@ import os
 import subprocess
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from time import perf_counter
 
 import numpy as np
 
@@ -72,7 +73,22 @@ def cleanup(product_id, out_dir):
             path.unlink(missing_ok=True)
 
 
-def process_product(product_id, out_dir, s3_credentials):
+def upload_tiffs(tiff_paths, destination):
+    # The ASF credentials apply only to the download subprocess.
+    for path in tiff_paths:
+        result = subprocess.run(
+            [
+                "aws", "s3", "cp", str(path), f"{destination}/{path.name}",
+                "--region", "us-west-2", "--only-show-errors",
+            ],
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(f"Upload failed for {path.name}: {result.stderr.strip()}")
+
+
+def process_product(product_id, out_dir, s3_credentials, *, tiff_s3_uri=None):
     product_id = product_id.strip()
     prefix = product_id.replace("_CX_01", "")
 
@@ -81,6 +97,7 @@ def process_product(product_id, out_dir, s3_credentials):
         f"UAVSAR/UAVSAR_POLSAR/{product_id}"
     )
 
+    download_start = perf_counter()
     s3_credentials.sync(
         [
             "aws", "s3", "sync", s3_prefix, str(out_dir),
@@ -93,7 +110,9 @@ def process_product(product_id, out_dir, s3_credentials):
             "--only-show-errors",
         ]
     )
+    print(f"ASF sync: {perf_counter() - download_start:.1f}s")
 
+    conversion_start = perf_counter()
     ann_path = out_dir / f"{product_id}.ann"
     if not ann_path.exists():
         raise FileNotFoundError(f"Missing annotation: {ann_path}")
@@ -128,8 +147,9 @@ def process_product(product_id, out_dir, s3_credentials):
         infer_inc_from_grd=True,
     )
 
+    tiff_paths = []
     for grd_path in grd_files:
-        make_tiff(
+        tiff_path = make_tiff(
             raster_path=grd_path,
             header_path=Path(str(grd_path) + ".hdr"),
             output_dir=out_dir,
@@ -140,13 +160,25 @@ def process_product(product_id, out_dir, s3_credentials):
             suffix="_cog",
             extension=".tif",
         )
+        tiff_paths.append(tiff_path)
 
-    make_inc_mask_tiffs(
+    inc_tiff, mask_tiff = make_inc_mask_tiffs(
         inc_path=inc_path,
         header_path=Path(str(inc_path) + ".hdr"),
         output_dir=out_dir,
-        overwrite=False,
+        overwrite=tiff_s3_uri is not None,
     )
+    print(f"GeoTIFF conversion: {perf_counter() - conversion_start:.1f}s")
+
+    if tiff_s3_uri:
+        tiff_paths.extend([inc_tiff, mask_tiff])
+        destination = f"{tiff_s3_uri}/{product_id}"
+        print(f"Uploading GeoTIFFs to {destination}/")
+        upload_start = perf_counter()
+        upload_tiffs(tiff_paths, destination)
+        print(f"S3 upload: {perf_counter() - upload_start:.1f}s")
+        for path in tiff_paths:
+            path.unlink(missing_ok=True)
 
     cleanup(product_id, out_dir)
 
@@ -160,7 +192,16 @@ def main():
     parser.add_argument(
         "--log", type=Path, default=Path("uavsar_download_log.csv")
     )
+    parser.add_argument(
+        "--tiff-s3-uri", metavar="s3://BUCKET[/PREFIX]",
+        help="Upload GeoTIFFs to a per-product S3 prefix, then delete local TIFFs and raw inputs.",
+    )
     args = parser.parse_args()
+    if args.tiff_s3_uri is not None:
+        scheme, _, location = args.tiff_s3_uri.partition("://")
+        if scheme != "s3" or not location.split("/", 1)[0]:
+            parser.error("--tiff-s3-uri must be s3://BUCKET or s3://BUCKET/PREFIX")
+        args.tiff_s3_uri = args.tiff_s3_uri.rstrip("/")
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -179,7 +220,10 @@ def main():
         for product_id in product_ids:
             print(f"\n{product_id}")
             try:
-                process_product(product_id, args.output_dir, s3_credentials)
+                process_product(
+                    product_id, args.output_dir, s3_credentials,
+                    tiff_s3_uri=args.tiff_s3_uri,
+                )
                 writer.writerow([product_id, "SUCCESS", ""])
                 print("SUCCESS")
             except Exception as exc:
