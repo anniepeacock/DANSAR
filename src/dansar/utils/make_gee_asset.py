@@ -20,11 +20,19 @@ Workflow:
     local COG directory
         -> upload each COG to GCS
         -> build one 5-band EE manifest per acquisition
-        -> submit the manifest via the Earth Engine Python API
+        -> earthengine upload image --manifest ...
 
-By default, the script uses credentials configured outside it. To use a
-Google service account for both GCS and Earth Engine, pass the JSON key path
-as service_account_file and the Google Cloud project ID as project.
+S3 batch mode accepts a Google service-account key for GCS and Earth Engine.
+Local mode also accepts a key or uses existing external authentication.
+
+S3 example (only temporary local TIFFs are deleted):
+
+    python -m dansar.utils.make_gee_asset s3://BUCKET/COG_PREFIX/ \
+        --bucket GCS_BUCKET --asset-parent projects/PROJECT/assets/uavsar \
+        --key-file /path/to/google-key.json --project PROJECT
+
+S3 dry-run lists planned work without downloading TIFFs or uploading assets.
+Use the same --work-dir when resuming to reuse the ingestion task journal.
 
 Typical Colab usage after authentication:
 
@@ -39,11 +47,16 @@ Typical Colab usage after authentication:
 
 import argparse
 import json
+import os
+import re
+import tempfile
+from urllib.parse import urlparse
+import shutil
+import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-import ee
 import rasterio
 from google.cloud import storage
 
@@ -834,17 +847,40 @@ def write_manifest(
 
 
 # ---------------------------------------------------------------------
-# Earth Engine ingestion
+# Earth Engine CLI
 # ---------------------------------------------------------------------
 
-def create_ee_asset(manifest_path):
-    """Submit an image ingestion using the initialized Earth Engine client."""
-    with Path(manifest_path).open(encoding="utf-8") as source:
-        manifest = json.load(source)
+def create_ee_asset(
+    manifest_path,
+    key_file=None,
+    project=None,
+):
+    """
+    Create one ingested Earth Engine image asset.
+    """
 
-    request_id = ee.data.newTaskId()[0]
-    operation = ee.data.startIngestion(request_id, manifest)
-    print("Started upload task with ID:", operation["id"])
+    earthengine = shutil.which(
+        "earthengine"
+    )
+
+    if earthengine is None:
+        raise FileNotFoundError(
+            "earthengine CLI not found. "
+            "Install earthengine-api."
+        )
+
+    subprocess.run(
+        [
+            earthengine,
+            *(["--service_account_file", str(key_file)] if key_file else []),
+            *(["--project", project] if project else []),
+            "upload",
+            "image",
+            "--manifest",
+            str(manifest_path),
+        ],
+        check=True,
+    )
 
 
 # ---------------------------------------------------------------------
@@ -859,10 +895,8 @@ def make_gee_assets(
     manifest_dir=None,
     overwrite_gcs=False,
     dry_run=False,
-    *,
-    service_account_file=None,
+    key_file=None,
     project=None,
-    skip_existing=False,
 ):
     """
     Create one 5-band ingested Earth Engine image per UAVSAR
@@ -875,12 +909,6 @@ def make_gee_assets(
         VV
         INC
         MASK
-
-    service_account_file optionally supplies a Google service account JSON
-    key for both GCS and Earth Engine. project optionally sets the Google
-    Cloud project used by both clients. asset_parent sets the asset location.
-    Set skip_existing=True to skip acquisitions whose asset names already
-    exist under asset_parent.
     """
 
     input_dir = Path(
@@ -901,15 +929,10 @@ def make_gee_assets(
         cogs
     )
 
-    if service_account_file is None:
-        client = storage.Client(project=project)
-    else:
-        service_account_file = Path(service_account_file).expanduser().resolve(
-            strict=True
-        )
-        client = storage.Client.from_service_account_json(
-            str(service_account_file), project=project
-        )
+    client = (
+        storage.Client.from_service_account_json(str(key_file), project=project)
+        if key_file else storage.Client(project=project)
+    )
 
     bucket_info = client.get_bucket(
         bucket
@@ -937,32 +960,12 @@ def make_gee_assets(
 
     results = []
 
-    asset_parent = str(asset_parent).rstrip("/")
-    if not dry_run or skip_existing:
-        if service_account_file is not None:
-            credentials = ee.ServiceAccountCredentials(
-                key_file=str(service_account_file)
-            )
-            ee.Initialize(credentials=credentials, project=client.project)
-        elif project is not None or not ee.data.is_initialized():
-            ee.Initialize(project=project)
-
-    existing_names = set()
-    if skip_existing:
-        response = ee.data.listAssets({"parent": asset_parent, "view": "BASIC"})
-        existing_names = {asset["name"] for asset in response["assets"]}
-
     for (
         acquisition_id,
         group,
     ) in sorted(
         groups.items()
     ):
-
-        asset_name = f"{asset_parent}/{acquisition_id}"
-        if asset_name in existing_names:
-            print("Earth Engine asset exists, skipping:", asset_name)
-            continue
 
         print()
         print(
@@ -1047,12 +1050,157 @@ def make_gee_assets(
                 manifest["name"],
             )
 
-            create_ee_asset(manifest_path)
+            create_ee_asset(
+                manifest_path, key_file=key_file, project=project
+            )
 
         results.append(
             manifest["name"]
         )
 
+    return results
+
+
+# ---------------------------------------------------------------------
+# S3 batch workflow
+# ---------------------------------------------------------------------
+
+def list_s3_acquisitions(s3_uri):
+    """List TIFF keys recursively, grouped by the UAVSAR acquisition filename.
+
+    AWS CLI automatically paginates list-objects-v2. Both flat prefixes and
+    product subdirectories are supported; no imagery is downloaded here.
+    """
+    parsed = urlparse(s3_uri)
+    if parsed.scheme != "s3" or not parsed.netloc or parsed.query or parsed.fragment:
+        raise ValueError("Expected s3://BUCKET/optional/prefix/")
+    prefix = parsed.path.lstrip("/")
+    if prefix and not prefix.endswith("/"):
+        prefix += "/"
+    result = subprocess.run(
+        ["aws", "s3api", "list-objects-v2", "--bucket", parsed.netloc,
+         "--prefix", prefix, "--query", "Contents[].Key", "--output", "json"],
+        check=True, capture_output=True, text=True,
+    )
+    groups = {}
+    for key in json.loads(result.stdout) or []:
+        if Path(key).suffix.lower() not in {".tif", ".tiff"}:
+            continue
+        match = re.match(
+            r"^(.*?_L\d{3})(?:HHHH|HVHV|VVVV)?(_[A-Z]{2}_\d{2})(?:_|\.)",
+            Path(key).name,
+        )
+        if not match:
+            raise ValueError(f"Cannot identify UAVSAR acquisition from S3 key: {key}")
+        acquisition = "".join(match.groups())
+        groups.setdefault(acquisition, []).append(key[len(prefix):])
+    if not groups:
+        raise ValueError(f"No UAVSAR TIFFs found under {s3_uri}")
+    return f"s3://{parsed.netloc}/{prefix}", groups
+
+
+def make_gee_assets_from_s3(
+    s3_uri, bucket, asset_parent, key_file=None, project=None,
+    work_dir="gee_work", gcs_prefix="", overwrite_gcs=False, dry_run=False,
+):
+    """Sync one acquisition, stage in GCS, submit ingestion, delete local copies.
+
+    AWS credentials come from the AWS CLI's normal credential chain. The Google
+    service-account JSON is supplied explicitly or via GOOGLE_APPLICATION_CREDENTIALS.
+    S3 originals and GCS staging objects are never deleted. Manifests and a task
+    journal remain in work_dir. Reruns skip completed assets and active journaled
+    tasks; failed tasks can be resubmitted. Run only one batch per work_dir.
+    """
+    import ee
+    from google.oauth2 import service_account
+
+    key_file = key_file or os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
+    if not key_file:
+        raise ValueError("Supply --key-file or GOOGLE_APPLICATION_CREDENTIALS")
+    credentials = service_account.Credentials.from_service_account_file(
+        str(Path(key_file).expanduser()),
+        scopes=["https://www.googleapis.com/auth/cloud-platform",
+                "https://www.googleapis.com/auth/earthengine"],
+    )
+    project = project or credentials.project_id
+    ee.Initialize(credentials=credentials, project=project)
+    client = storage.Client(credentials=credentials, project=project)
+    source, groups = list_s3_acquisitions(s3_uri)
+    root = Path(work_dir).expanduser().resolve()
+    root.mkdir(parents=True, exist_ok=True)
+    journal = root / "gee_tasks.jsonl"
+    previous = {}
+    if journal.exists():
+        for line in journal.read_text().splitlines():
+            record = json.loads(line)
+            previous[record["asset"]] = record["task_id"]
+
+    # Fetch the full asset inventory once, including all result pages.
+    existing = set()
+    request = {"parent": asset_parent.rstrip("/")}
+    while True:
+        page = ee.data.listAssets(request)
+        existing.update(a["name"] for a in page.get("assets", []))
+        if not page.get("nextPageToken"):
+            break
+        request["pageToken"] = page["nextPageToken"]
+
+    results, failures = [], []
+    for acquisition, relative_keys in sorted(groups.items()):
+        asset = f"{asset_parent.rstrip('/')}/{acquisition}"
+        if asset in existing:
+            print("GEE exists, skipping:", asset)
+            continue
+        if asset in previous:
+            state = ee.data.getTaskStatus(previous[asset])[0]["state"]
+            if state in {"READY", "RUNNING", "COMPLETED", "CANCEL_REQUESTED"}:
+                print(f"Task {state}, skipping: {asset}")
+                continue
+        if dry_run:
+            print(f"Would sync {len(relative_keys)} TIFFs, stage and ingest: {asset}")
+            continue
+        try:
+            # Isolated scratch directory prevents deletion of unrelated local files.
+            with tempfile.TemporaryDirectory(prefix="uavsar_", dir=root) as temp:
+                command = ["aws", "s3", "sync", source, temp,
+                           "--exclude", "*", "--only-show-errors"]
+                for key in sorted(relative_keys):
+                    if any(c in key for c in "*?[]"):
+                        raise ValueError(f"Unsupported AWS filter characters in key: {key}")
+                    command.extend(["--include", key])
+                subprocess.run(command, check=True)
+                cogs = sorted(p for p in Path(temp).rglob("*")
+                              if p.is_file() and p.suffix.lower() in {".tif", ".tiff"})
+                grouped = group_cogs_by_acquisition(cogs)
+                if set(grouped) != {acquisition}:
+                    raise ValueError(f"Downloaded TIFF tags do not match {acquisition}")
+                group = grouped[acquisition]
+                uris = {}
+                for band in EXPECTED_BANDS:
+                    path = group[band]["path"]
+                    object_name = "/".join(filter(None, [
+                        gcs_prefix.strip("/"), acquisition, path.name]))
+                    uris[band] = upload_to_gcs(
+                        client, bucket, path, object_name, overwrite=overwrite_gcs)
+                manifest = build_manifest(acquisition, group, uris, asset_parent)
+                write_manifest(manifest, root / "manifests")
+                task_id = ee.data.newTaskId()[0]
+                # Save the ID before submission, so an interrupted response can be
+                # checked on the next run instead of blindly submitting again.
+                with journal.open("a", encoding="utf-8") as dst:
+                    dst.write(json.dumps({"asset": asset, "task_id": task_id}) + "\n")
+                    dst.flush()
+                    os.fsync(dst.fileno())
+                ee.data.startIngestion(task_id, manifest)
+                results.append(asset)
+                print("Ingestion submitted; removing local TIFFs:", asset)
+        except Exception as exc:
+            # Temporary files are also cleaned on failure; originals remain in S3.
+            failures.append((asset, str(exc)))
+            print(f"FAILED {asset}: {exc}", file=sys.stderr)
+    print(f"Submitted: {len(results)}; failed: {len(failures)}")
+    if failures:
+        raise RuntimeError(f"{len(failures)} acquisition(s) failed; rerun to retry")
     return results
 
 
@@ -1064,7 +1212,7 @@ def main():
 
     parser = argparse.ArgumentParser(
         description=(
-            "Upload a local directory of UAVSAR PolSAR "
+            "Upload a local directory or S3 prefix of UAVSAR PolSAR "
             "HH/HV/VV/INC/MASK COGs to GCS and create "
             "one 5-band Earth Engine image asset "
             "per acquisition."
@@ -1074,7 +1222,7 @@ def main():
     parser.add_argument(
         "input_dir",
         help=(
-            "Directory containing UAVSAR "
+            "Local directory or s3://BUCKET/PREFIX/ containing UAVSAR "
             "HH/HV/VV/INC/MASK COG "
             ".tif/.tiff files."
         ),
@@ -1126,37 +1274,37 @@ def main():
         "--dry-run",
         action="store_true",
         help=(
-            "Write manifests only; "
+            "Plan only (S3: no TIFF downloads; local: write manifests); "
             "do not upload or create assets."
         ),
     )
 
-    parser.add_argument(
-        "--service-account-file",
-        type=Path,
-        help="Path to a Google service account JSON key for GCS and Earth Engine.",
-    )
-
-    parser.add_argument(
-        "--project",
-        help="Google Cloud project ID for the GCS and Earth Engine clients.",
-    )
-
+    parser.add_argument("--key-file", default=os.environ.get("GOOGLE_APPLICATION_CREDENTIALS"),
+                        help="Google service-account JSON (required for S3 mode).")
+    parser.add_argument("--project", help="Google project ID; S3 default: key project_id.")
+    parser.add_argument("--work-dir", default="gee_work",
+                        help="S3 scratch space, persistent manifests and task journal.")
     args = parser.parse_args()
 
     try:
 
-        assets = make_gee_assets(
-            input_dir=args.input_dir,
-            bucket=args.bucket,
-            asset_parent=args.asset_parent,
-            gcs_prefix=args.gcs_prefix,
-            manifest_dir=args.manifest_dir,
-            overwrite_gcs=args.overwrite_gcs,
-            dry_run=args.dry_run,
-            service_account_file=args.service_account_file,
-            project=args.project,
-        )
+        if args.input_dir.startswith("s3://"):
+            if args.manifest_dir:
+                parser.error("For S3 mode, use --work-dir instead of --manifest-dir")
+            assets = make_gee_assets_from_s3(
+                s3_uri=args.input_dir, bucket=args.bucket,
+                asset_parent=args.asset_parent, key_file=args.key_file,
+                project=args.project, work_dir=args.work_dir,
+                gcs_prefix=args.gcs_prefix, overwrite_gcs=args.overwrite_gcs,
+                dry_run=args.dry_run,
+            )
+        else:
+            assets = make_gee_assets(
+                input_dir=args.input_dir, bucket=args.bucket,
+                asset_parent=args.asset_parent, gcs_prefix=args.gcs_prefix,
+                manifest_dir=args.manifest_dir, overwrite_gcs=args.overwrite_gcs,
+                dry_run=args.dry_run, key_file=args.key_file, project=args.project,
+            )
 
         print()
 
